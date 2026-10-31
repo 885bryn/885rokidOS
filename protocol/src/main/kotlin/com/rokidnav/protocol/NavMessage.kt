@@ -168,6 +168,22 @@ data class SettingsUpdate(
     val demoMode: Boolean = false,
 ) : NavMessage
 
+/**
+ * A phone notification the user chose to see on the glasses (see PhoneNotificationListener). Shown
+ * briefly as a card over any HUD view; never cached for resync, because an old notification is noise.
+ */
+@Serializable @SerialName("notification")
+data class PhoneNotification(
+    override val seq: Long,
+    /** Phone-side key; a newer post with the same id replaces the card. */
+    val id: String,
+    /** App label, e.g. "Messages". */
+    val app: String = "",
+    val title: String = "",
+    val text: String = "",
+    val postedAtMs: Long = 0,
+) : NavMessage
+
 // ---------------------------------------------------------------- glasses -> phone
 
 @Serializable @SerialName("hello")

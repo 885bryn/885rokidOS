@@ -86,20 +86,22 @@ class MainActivity:AppCompatActivity() {
     }
     /**
      * Battery: hold the display on only while the phone is actually guiding (link up, not silent).
-     * Without a live trip the HUD closes itself after a while, so the glasses can sleep instead of
-     * showing an idle or "Phone not sending" screen all night.
+     * With the phone connected the HUD stays open without a trip (it is the home for notifications and
+     * other features) but lets the display sleep. Without the phone it closes itself after a while.
      */
     private var screenHeld=false
     private var idleSince=0L
     private val idleExit=Runnable {if(!isFinishing){android.util.Log.i("RokidNavHud","idle_exit");finish()}}
     private fun keepScreenOn(s:com.rokidnav.glasses.state.HudState) {
         val live=s.navState in HOLD_SCREEN && s.linkConnected && !s.phoneSilent
-        if(live!=screenHeld) {
-            screenHeld=live
-            if(live)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // VERIFY: whether a card wakes a display that is already asleep; this only keeps an awake one on.
+        val hold=live || s.notification!=null
+        if(hold!=screenHeld) {
+            screenHeld=hold
+            if(hold)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
         if(demo)return
-        if(live){idleSince=0L;hud.removeCallbacks(idleExit)}
+        if(live || s.linkConnected){idleSince=0L;hud.removeCallbacks(idleExit)}
         else if(idleSince==0L){idleSince=SystemClock.uptimeMillis();hud.postDelayed(idleExit,IDLE_EXIT_MS)}
     }
     private val demo get()=intent.getBooleanExtra("demo",false)

@@ -123,4 +123,17 @@ class HudStoreTest {
         now+=5000;hud.tick();hud.tick()
         assertEquals(1,resyncs)
     }
+
+    @Test fun notificationCardHidesOnTapOrAfterTimeout() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(1,"n1","Messages","Sam","On my way"))
+        assertEquals("Sam",hud.state.value.notification?.title)
+        hud.onKey(GlassesKey.TAP)
+        assertNull(hud.state.value.notification)
+        assertEquals(HudMode.Compact,hud.state.value.mode)
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(2,"n2","Mail","Bill","Due"))
+        now+=HudStore.NOTIFICATION_SHOW_MS;hud.tick()
+        assertNull(hud.state.value.notification)
+    }
 }

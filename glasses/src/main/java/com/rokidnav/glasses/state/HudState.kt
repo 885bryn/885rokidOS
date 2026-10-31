@@ -5,6 +5,7 @@ import com.rokidnav.protocol.DetourOffer
 import com.rokidnav.protocol.LatLng
 import com.rokidnav.protocol.ManeuverUpdate
 import com.rokidnav.protocol.NavState
+import com.rokidnav.protocol.PhoneNotification
 import com.rokidnav.protocol.PositionUpdate
 import com.rokidnav.protocol.TrafficSegment
 import com.rokidnav.protocol.TripProgress
@@ -35,6 +36,9 @@ data class HudState(
     /** When each alert id first appeared (clock ms): the chip is highlighted briefly, then goes quiet. */
     val alertSeenAt: Map<String, Long> = emptyMap(),
     val detour: DetourOffer? = null,
+    /** Latest phone notification, shown as a card for [HudStore.NOTIFICATION_SHOW_MS]; tap hides it. */
+    val notification: PhoneNotification? = null,
+    val notificationShownAt: Long = 0,
 
     val mode: HudMode = HudMode.Compact,
     val mapZoom: Int = 1,         // 0 = close (~300 m ahead), 1 = default (~800 m), 2 = far (~2 km)

@@ -84,18 +84,23 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         }
         scope.launch {link.incoming.collect {when(it){is GlassesHello,is ResyncRequest->resync();is GlassesAction->action(it);else->Unit}}}
         scope.launch {link.state.collect {if(it==LinkState.Ready){applySettings(settings?.state?.value ?: preferences);resync()}}}
-        // Glasses battery: an open session keeps the HUD running on the glasses (and Rokid may relaunch
-        // it whenever they wake), so close it after IDLE_CLOSE_MS without a trip. The next trip reopens it.
-        scope.launch {combine(engine.navState,link.state){nav,state->nav !in GUIDING && state==LinkState.Ready}
-            .distinctUntilChanged().collectLatest {idle->if(idle){delay(IDLE_CLOSE_MS);link.disconnect()}}}
+        // Rokid Nav is more than navigation (notifications, later music and calls), so the session stays
+        // open with or without a trip. It opens right after authorization, when the phone app comes to the
+        // front (onAppOpened) and when a trip starts. A user Disconnect is respected until one of those.
+        scope.launch {
+            var previous=link.state.value
+            link.state.collect {if(it==LinkState.Authorized && previous==LinkState.Authorizing)link.connect();previous=it}
+        }
         scope.launch {engine.navState.map {it==NavState.ACTIVE}.distinctUntilChanged().collect {
-            if(it && link.state.value==LinkState.Authorized)link.connect()
+            if(it)reconnectIfAllowed()
         }}
         traffic.start(scope)
     }
-    companion object {
-        const val IDLE_CLOSE_MS=3*60_000L
-        private val GUIDING=setOf(NavState.ROUTING,NavState.ACTIVE,NavState.REROUTING,NavState.GPS_LOST)
+    /** The phone app came to the front: reopen the glasses session when the token allows it. */
+    fun onAppOpened()=reconnectIfAllowed()
+    private fun reconnectIfAllowed() {
+        val s=link.state.value
+        if(s==LinkState.Authorized || s is LinkState.Closed && !s.needsReauth)link.connect()
     }
     private fun activeGuidance()=combine(engine.activeRoute,engine.navState){route,state->
         route.takeIf {state in listOf(NavState.ACTIVE,NavState.REROUTING,NavState.GPS_LOST)}}.distinctUntilChanged()
@@ -147,6 +152,10 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         if(!accepted)pending?.let {traffic.dismiss(it.option,System.currentTimeMillis())}
         offerJob?.cancel();offerJob=null;pending=null;offer.value=null;accepting=false
         link.send(DetourResolved(seq.next(),message.offerId,accepted))
+    }
+    /** Not cached for resync: a notification only matters when it arrives. Dropped unless the link is Ready. */
+    fun forwardNotification(id:String,app:String,title:String,text:String,postedAtMs:Long){
+        link.send(PhoneNotification(seq.next(),id,app,title,text,postedAtMs))
     }
     fun respondToDetour(accept:Boolean){offer.value?.let {action(GlassesAction(0,if(accept)ActionType.ACCEPT_DETOUR else ActionType.DISMISS_DETOUR,it.offerId))}}
     private fun applySettings(value:UserSettings) {

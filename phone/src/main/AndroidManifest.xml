@@ -16,6 +16,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Glasses link without a trip (GlassesLinkService). Android 14 requires one of a set of
+         permissions for this type; CHANGE_NETWORK_STATE is install-time, so it is always granted. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+
     <queries>
         <package android:name="app.sabre.wzsabre" />
         <package android:name="com.rokid.sprite.aiapp" />
@@ -52,5 +57,21 @@
             android:name=".session.NavForegroundService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Keeps the glasses session alive with no trip. -->
+        <service
+            android:name=".session.GlassesLinkService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- Phone notifications for the glasses. Active only after the user grants Notification access. -->
+        <service
+            android:name=".notify.PhoneNotificationListener"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

@@ -10,7 +10,11 @@ import com.rokidnav.phone.glasses.CxrGlassesLink
 import com.rokidnav.phone.glasses.GlassesLink
 import com.rokidnav.phone.nav.GoogleNavigationEngine
 import com.rokidnav.phone.nav.NavigationEngine
+import com.rokidnav.phone.session.GlassesLinkService
 import com.rokidnav.phone.session.NavSessionCoordinator
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import com.rokidnav.phone.traffic.RoutesApiClient
 import com.rokidnav.phone.traffic.TrafficMonitor
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +67,9 @@ class RokidNavApp : Application() {
             speaker = com.rokidnav.phone.alerts.AndroidAlertSpeaker(this),
         )
         coordinator.start()
+        appScope.launch {glassesLink.state.map(GlassesLinkService::wanted).distinctUntilChanged().collect {
+            GlassesLinkService.sync(this@RokidNavApp,glassesLink.state.value)
+        }}
     }
 
     companion object {

@@ -64,6 +64,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                     alertSeenAt=if(tripOver)emptyMap() else it.alertSeenAt)}
             }
             is SettingsUpdate->mutable.update {it.copy(voiceMuted=m.voiceMuted,units=m.units,mapZoom=m.mapZoomLevel.coerceIn(0,2),demoMode=m.demoMode)}
+            is PhoneNotification->mutable.update {it.copy(notification=m,notificationShownAt=clock())}
             else->Unit
         }
     }
@@ -92,6 +93,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 sendAction(GlassesAction(0,if(key==GlassesKey.TAP)ActionType.ACCEPT_DETOUR else ActionType.DISMISS_DETOUR,d.offerId))
                 mutable.update {it.copy(detour=null)}
             }
+            // A detour offer hides the card, so its taps above win; otherwise a tap only hides the card.
+            s.notification!=null && key==GlassesKey.TAP->mutable.update {it.copy(notification=null)}
             key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
             key==GlassesKey.SWIPE_FORWARD->{mutable.update {it.copy(mapZoom=(it.mapZoom-1).coerceAtLeast(0))};sendAction(GlassesAction(0,ActionType.ZOOM_IN))}
             key==GlassesKey.SWIPE_BACK->{mutable.update {it.copy(mapZoom=(it.mapZoom+1).coerceAtMost(2))};sendAction(GlassesAction(0,ActionType.ZOOM_OUT))}
@@ -111,6 +114,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             phoneSilent=silent && s.navState in listOf(NavState.ACTIVE,NavState.REROUTING,NavState.GPS_LOST),
             alerts=if(stale.isEmpty())s.alerts else s.alerts.filterNot {it.id in stale},
             alertSeenAt=if(stale.isEmpty())s.alertSeenAt else s.alertSeenAt-stale,
+            notification=s.notification?.takeIf {now-s.notificationShownAt<NOTIFICATION_SHOW_MS},
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
             // Otherwise an unchanged state is not re-emitted, so an idle HUD does not redraw every second.
@@ -121,5 +125,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         const val ALERT_STALE_MS=120_000L
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L
+        /** Driver safety: a card is a glance, not something to read. */
+        const val NOTIFICATION_SHOW_MS=6_000L
     }
 }

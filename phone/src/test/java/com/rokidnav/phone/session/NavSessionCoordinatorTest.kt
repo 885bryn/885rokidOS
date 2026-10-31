@@ -48,26 +48,39 @@ class NavSessionCoordinatorTest {
         }
         override fun disconnect() { disconnects++; state.value = LinkState.Authorized }
     }
-    @Test fun closesTheGlassesSessionWhenIdleAndReopensItForTheNextTrip() = runTest {
+    @Test fun keepsTheGlassesSessionOpenWithoutATrip() = runTest {
         val engine = Engine()
         val link = Link()
-        val none = object : IncidentProvider {
-            override val name = "none"
-            override fun incidentsAlong(routePolyline: String) = flowOf(emptyList<Incident>())
-        }
-        NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), none).start()
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents)
+        coordinator.start()
         runCurrent()
-        advanceTimeBy(NavSessionCoordinator.IDLE_CLOSE_MS * 2); runCurrent()
-        assertEquals("guiding keeps the session", 0, link.disconnects)
         engine.stop(); runCurrent()
-        advanceTimeBy(NavSessionCoordinator.IDLE_CLOSE_MS - 1_000); runCurrent()
-        assertEquals(0, link.disconnects)
-        advanceTimeBy(2_000); runCurrent()
-        assertEquals(1, link.disconnects)
+        advanceTimeBy(60 * 60_000L); runCurrent()
+        assertEquals("no trip does not close the session", 0, link.disconnects)
+        // A user Disconnect stays until the app is opened again or a trip starts.
+        link.disconnect(); runCurrent()
         assertEquals(LinkState.Authorized, link.state.value)
-        engine.navState.value = NavState.ACTIVE; runCurrent()
+        coordinator.onAppOpened(); runCurrent()
         assertEquals(1, link.connects)
+        link.state.value = LinkState.Closed(LinkState.Closed.HUD_CLOSED, needsReauth = false); runCurrent()
+        engine.navState.value = NavState.ACTIVE; runCurrent()
+        assertEquals(2, link.connects)
         assertEquals(LinkState.Ready, link.state.value)
+    }
+    @Test fun connectsRightAfterAuthorizationButNotAfterReauthClose() = runTest {
+        val engine = Engine().apply { navState.value = NavState.IDLE }
+        val link = Link().apply { state.value = LinkState.Authorizing }
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents)
+        coordinator.start(); runCurrent()
+        link.state.value = LinkState.Authorized; runCurrent()
+        assertEquals(1, link.connects)
+        link.state.value = LinkState.Closed("CHAIN_TORN", needsReauth = true); runCurrent()
+        coordinator.onAppOpened(); runCurrent()
+        assertEquals(1, link.connects)
+    }
+    private val noIncidents = object : IncidentProvider {
+        override val name = "none"
+        override fun incidentsAlong(routePolyline: String) = flowOf(emptyList<Incident>())
     }
     @Test fun sendsCountdownClearsWhileDisconnectedAndResyncsClearOnReconnect() = runTest {
         val engine = Engine()

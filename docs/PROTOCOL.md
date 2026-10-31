@@ -56,6 +56,7 @@ and opens a new session, which installs and opens the bundled APK. Tried once pe
 | `detour_offer` / `detour_resolved` | rare | faster route offer; expires at `expiresAtMs` |
 | `nav_state` | on change | IDLE/ROUTING/ACTIVE/REROUTING/GPS_LOST/ARRIVED/ENDED |
 | `settings` | on change | voice muted, units, zoom, brightnessPercent (default 35, ignored), demoMode (default false: 30 fps map) |
+| `notification` | phone notification posted (only while the link is Ready) | id, app, title, text, postedAtMs. Shown as a short card; never resent on resync. |
 
 ## Glasses → phone
 | `t` | When |

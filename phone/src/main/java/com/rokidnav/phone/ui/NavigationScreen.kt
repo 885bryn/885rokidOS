@@ -129,6 +129,13 @@ fun SettingsScreen(app:RokidNavApp) {
         Row {Switch(settings.police,{value->app.settings.update {it.copy(police=value)}});Text("WzSabre police reports")}
         Row {Switch(settings.cameras,{value->app.settings.update {it.copy(cameras=value)}});Text("WzSabre speed cameras")}
         Row {Switch(settings.demoMode,{value->app.settings.update {it.copy(demoMode=value)}});Text("Demo mode: smooth 30 fps map on the glasses (uses more battery)")}
+        // Re-read on every composition: the user grants access in system Settings and comes back.
+        val notificationAccess=androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(app).contains(app.packageName)
+        OutlinedButton(onClick={app.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))}) {
+            Text(if(notificationAccess)"Phone notifications on glasses: on (change)" else "Show phone notifications on glasses: allow access")
+        }
+        Text("Turn off notifications in Hi Rokid, or the glasses show them twice.",color=Color.LightGray)
         Text("Alerts on the glasses clear themselves once passed; no tapping needed.",color=Color.LightGray)
         Row {Switch(settings.alertVoice,{value->app.settings.update {it.copy(alertVoice=value)}});Text("Voice warning for each new report")}
         if(settings.alertVoice) {

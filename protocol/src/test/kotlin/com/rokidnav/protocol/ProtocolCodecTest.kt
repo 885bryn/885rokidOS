@@ -31,6 +31,7 @@ class ProtocolCodecTest {
             ManeuverUpdate(18, Step(Maneuver.ROUNDABOUT_CLOCKWISE, roundaboutExit = 3,
                 lanes = listOf(Lane(listOf(Maneuver.TURN_LEFT, Maneuver.STRAIGHT), true))), 30, 2),
             Alert(19, "cam1", AlertKind.SPEED_CAMERA, 700, 37.0, -122.0, "Speed camera", "WzSabre", 1700000000000),
+            PhoneNotification(22, "n1", "Messages", "Sam", "On my way", 1700000000000),
         )
         for (m in messages) {
             val (magic, body) = ProtocolCodec.encode(m)
@@ -55,5 +56,9 @@ class ProtocolCodecTest {
     @Test fun oldAlertsHaveUnknownReportTime() {
         val old="""{"t":"alert","seq":1,"id":"p1","kind":"POLICE","distanceAheadMeters":100,"lat":0,"lng":0}"""
         assertEquals(0L,(ProtocolCodec.decode(ProtocolVersion.MAGIC,old) as Alert).reportedAtMs)
+    }
+    @Test fun minimalNotificationDecodes() {
+        val body="""{"t":"notification","seq":1,"id":"n1"}"""
+        assertEquals(PhoneNotification(1,"n1"),ProtocolCodec.decode(ProtocolVersion.MAGIC,body))
     }
 }

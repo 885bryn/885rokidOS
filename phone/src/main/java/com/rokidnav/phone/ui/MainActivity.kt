@@ -68,6 +68,8 @@ class MainActivity:ComponentActivity() {
             }
         }
     }
+    /** Opening the app brings the glasses session back (no-op before authorization or while open). */
+    override fun onStart(){super.onStart();app.coordinator.onAppOpened()}
     /** Leaving or closing the app with no trip running frees Google's navigator and its notification. */
     override fun onStop(){super.onStop();app.navEngine.releaseIfIdle()}
     @Deprecated("Rokid SDK uses activity authorization results")
