@@ -85,7 +85,7 @@ class HudRenderer(context: Context) {
     private var notificationApp = ""
     private var notificationTitle = ""
     private var mediaApp = ""
-    private var mediaTitle = ""
+    private var mediaTitle = emptyArray<String>()
     private var mediaArtist = ""
     private var mediaElapsed = ""
     private var mediaTotal = ""
@@ -256,19 +256,19 @@ class HudRenderer(context: Context) {
             if(n!==old.notification || layout!=cardLayout) {
                 cardLayout=layout
                 cardLeft=if(corner && idle)18f else if(corner)240f else 14f
-                cardTop=if(corner)410f else if(idle)90f else 124f
+                cardTop=if(corner && idle)370f else if(corner)410f else if(idle)90f else 124f
                 cardW=if(corner && !idle)222f else if(corner)444f else 452f
-                cardSize=if(corner && !idle)16f else 18f
-                cardStep=cardSize+5f
-                notificationApp=ellipsize(n.app.uppercase(),14f,cardW-32f)
-                notificationTitle=ellipsize(n.title,20f,cardW-40f)
+                cardSize=if(corner && !idle)20f else 22f
+                cardStep=cardSize+6f
+                notificationApp=ellipsize(n.app.uppercase(),17f,cardW-32f)
+                notificationTitle=ellipsize(n.title,26f,cardW-32f)
                 notificationLines=wrap(n.text,cardSize,cardW-32f,if(idle)6 else 4)
             }
         }
         next.media?.let { m ->
             val position=next.mediaPositionMs()
             mediaApp=m.app.uppercase()
-            mediaTitle=ellipsize(m.title,32f,400f);mediaArtist=ellipsize(m.artist,24f,420f)
+            mediaTitle=wrap(m.title,34f,MEDIA_W-8f,2);mediaArtist=ellipsize(m.artist,26f,MEDIA_W)
             mediaElapsed=Format.clock(position)
             mediaTotal=if(m.durationMs>0)Format.clock(m.durationMs) else ""
             mediaFraction=if(m.durationMs>0)position/m.durationMs.toFloat() else 0f
@@ -361,7 +361,7 @@ class HudRenderer(context: Context) {
                 // notification card replaces it. Only a lost phone link says anything.
                 if(s.notification==null) {
                     if(s.media!=null) media(c,18f,110f)
-                    else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,26f,180)
+                    else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,30f,204)
                 }
             }
             else -> {
@@ -381,7 +381,7 @@ class HudRenderer(context: Context) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
             if(s.notification==null) {
                 if(s.media!=null) media(c,18f,408f)
-                else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,24f,180)
+                else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,28f,204)
             }
             return
         }
@@ -731,32 +731,35 @@ class HudRenderer(context: Context) {
     /** Now playing: app and play state, track, artist, progress bar with times. Tap/swipes are in HudStore. */
     private fun media(c:Canvas,left:Float,top:Float) {
         val right=left+MEDIA_W
-        text(c,mediaApp,left,top+20f,17f,179,b=true)
-        // The icon shows what a tap does: bars while playing would mean "pause", so show the state instead.
+        text(c,mediaApp,left,top+20f,18f,179,b=true)
+        // The icon shows the state: two bars while playing, a triangle while paused.
         if(s.media?.playing==true) {
             c.drawLine(right-22f,top+2f,right-22f,top+24f,paint(stroke=6f));c.drawLine(right-8f,top+2f,right-8f,top+24f,paint(stroke=6f))
         } else {
             c.save();c.translate(right-24f,top+1f);c.drawPath(playTriangle,paint());c.restore()
         }
-        text(c,mediaTitle,left,top+62f,32f,b=true)
-        text(c,mediaArtist,left,top+98f,24f,217)
+        var y=top+64f
+        for(i in mediaTitle.indices){text(c,mediaTitle[i],left,y,34f,b=true);y+=40f}
+        y-=40f
+        text(c,mediaArtist,left,y+38f,26f,224)
+        val barY=y+68f
         if(mediaTotal.isNotEmpty()) {
-            c.drawLine(left,top+124f,right,top+124f,paint(alpha=64,stroke=5f))
-            c.drawLine(left,top+124f,left+MEDIA_W*mediaFraction.coerceIn(0f,1f),top+124f,paint(stroke=5f))
+            c.drawLine(left,barY,right,barY,paint(alpha=64,stroke=6f))
+            c.drawLine(left,barY,left+MEDIA_W*mediaFraction.coerceIn(0f,1f),barY,paint(stroke=6f))
         }
-        text(c,mediaElapsed,left,top+158f,22f,204)
-        if(mediaTotal.isNotEmpty())right(c,mediaTotal,right,top+158f,22f,204)
+        text(c,mediaElapsed,left,barY+34f,24f,217)
+        if(mediaTotal.isNotEmpty())right(c,mediaTotal,right,barY+34f,24f,217)
     }
     /** Phone notification: app, title, wrapped text. Black fill hides what is under it; a detour wins. */
     private fun notificationCard(c:Canvas) {
         if(s.notification==null || s.detour!=null) return
         val lines=notificationLines.size
-        val height=if(lines==0)62f else 92f+(lines-1)*cardStep
+        val height=if(lines==0)72f else 94f+(lines-1)*cardStep+16f
         box(c,cardLeft,cardTop,cardLeft+cardW,cardTop+height,12f,fill=true,black=true)
         box(c,cardLeft,cardTop,cardLeft+cardW,cardTop+height,12f)
-        text(c,notificationApp,cardLeft+16f,cardTop+24f,14f,179,b=true)
-        text(c,notificationTitle,cardLeft+16f,cardTop+52f,20f,b=true)
-        for(i in 0 until lines)text(c,notificationLines[i],cardLeft+16f,cardTop+80f+i*cardStep,cardSize,217)
+        text(c,notificationApp,cardLeft+16f,cardTop+26f,17f,179,b=true)
+        text(c,notificationTitle,cardLeft+16f,cardTop+60f,26f,b=true)
+        for(i in 0 until lines)text(c,notificationLines[i],cardLeft+16f,cardTop+94f+i*cardStep,cardSize,230)
     }
     /** Splits [value] at spaces into at most [maxLines] lines that fit [width]; the last one ends in "…" if cut. */
     private fun wrap(value:String,size:Float,width:Float,maxLines:Int):Array<String> {

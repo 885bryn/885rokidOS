@@ -4,7 +4,7 @@
 read them as markup specs, they need the design canvas runtime to render). Live canvas:
 https://claude.ai/artifact/PKm7697RoMapZGAnxadHcg (owner-only unless shared).
 Screens: Main (map mode), Approach (turn < 500 ft + lanes), Minimal (highway), Police, Detour,
-Congestion, Menu, TripInfo, Arrived. The "Visual spec" section below is what to implement.
+Congestion, Menu, TripInfo, Arrived, Media (no trip), Notification (no trip). The "Visual spec" section below is what to implement.
 
 ## Display constraints
 - Monochrome **green** micro-LED waveguide. **Black = transparent** (you see the road). Every lit
@@ -82,6 +82,34 @@ Rokid temple touchpad. Broadcast names from the CXR docs; single-finger swipe de
 | Touch and hold | Rokid AI assistant (not used by the HUD) | — |
 | Swipe forward / back | zoom in / out (if the glasses deliver it) | — |
 | AI button | system (never consumed) | |
+
+## Beyond navigation (2026-10-31)
+
+Rokid Nav is also the glasses' notification and music screen. These screens work with or without a trip
+and use a **larger type scale** than the trip HUD: titles 26–34 px, body 22–26 px, labels 17–18 px,
+nothing under 17. The trip HUD keeps its own sizes (user decision: leave it alone).
+Mockups: `Media.dc.html`, `Notification.dc.html`. Expanded view coordinates; the corner (upright) view
+uses the same blocks lower on the 480×640 view.
+
+**Idle screen (no trip).** Black (transparent) unless one of these applies, in this order:
+1. a phone notification card (replaces everything for its lifetime);
+2. music playing or paused in a phone media session: the media screen;
+3. the phone link is lost: "Phone not connected" (30 px).
+The old "Rokid Nav / Ready / Start a trip" screen is gone. After a card expires the display shows only
+what is left in that list, never the old screen.
+
+**Media screen.** App name 18/700 caps @70% and a state icon (two bars playing, triangle paused) in the
+top-right; track title 34/700, wrapped to two lines; artist 26/600; 6 px progress bar (@25% track, solid
+fill); elapsed and total time 24/600. Corner view top 408, expanded top 110, width 444. The bar and times
+redraw every 5 s (battery); a track change, play/pause or seek redraws at once.
+Input: **tap** play/pause, **swipe forward** next, **swipe back** previous. They act on the phone's active
+media session (Spotify, YouTube Music, ...). On a trip these gestures keep their trip meaning and the
+media screen is not shown. The phone reads the session through Notification access.
+
+**Notification card.** App name 17/700 caps, title 26/700 (one line), text wrapped (22 px, up to 6 lines;
+20 px, 4 lines beside the turn arrow on a trip). The phone sends up to 60 characters of title and 300 of
+text (the notification's full "big text", line breaks joined). Shown 6 s, plus 60 ms per character up to
+15 s; a tap hides it. The card wakes a sleeping display. A detour offer hides the card.
 
 ## Menu (removed 2026-10-20)
 The HUD has no menu. Touch and hold starts the Rokid AI assistant and the glasses never delivered the
