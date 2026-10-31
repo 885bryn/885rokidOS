@@ -114,7 +114,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             phoneSilent=silent && s.navState in listOf(NavState.ACTIVE,NavState.REROUTING,NavState.GPS_LOST),
             alerts=if(stale.isEmpty())s.alerts else s.alerts.filterNot {it.id in stale},
             alertSeenAt=if(stale.isEmpty())s.alertSeenAt else s.alertSeenAt-stale,
-            notification=s.notification?.takeIf {now-s.notificationShownAt<NOTIFICATION_SHOW_MS},
+            notification=s.notification?.takeIf {now-s.notificationShownAt<notificationMillis(it)},
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
             // Otherwise an unchanged state is not re-emitted, so an idle HUD does not redraw every second.
@@ -125,7 +125,10 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         const val ALERT_STALE_MS=120_000L
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L
-        /** Driver safety: a card is a glance, not something to read. */
-        const val NOTIFICATION_SHOW_MS=6_000L
+        /** How long a card stays: longer text stays longer, but never past the maximum (driver safety). */
+        const val NOTIFICATION_MIN_MS=6_000L
+        const val NOTIFICATION_MAX_MS=15_000L
+        fun notificationMillis(n:PhoneNotification)=
+            (4_000L+60L*(n.title.length+n.text.length)).coerceIn(NOTIFICATION_MIN_MS,NOTIFICATION_MAX_MS)
     }
 }

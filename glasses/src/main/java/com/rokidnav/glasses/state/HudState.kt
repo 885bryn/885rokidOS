@@ -36,7 +36,7 @@ data class HudState(
     /** When each alert id first appeared (clock ms): the chip is highlighted briefly, then goes quiet. */
     val alertSeenAt: Map<String, Long> = emptyMap(),
     val detour: DetourOffer? = null,
-    /** Latest phone notification, shown as a card for [HudStore.NOTIFICATION_SHOW_MS]; tap hides it. */
+    /** Latest phone notification, shown as a card for [HudStore.notificationMillis]; tap hides it. */
     val notification: PhoneNotification? = null,
     val notificationShownAt: Long = 0,
 

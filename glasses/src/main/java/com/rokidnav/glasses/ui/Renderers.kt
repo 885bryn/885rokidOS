@@ -84,7 +84,13 @@ class HudRenderer(context: Context) {
     private var jamLabel = ""
     private var notificationApp = ""
     private var notificationTitle = ""
-    private var notificationText = ""
+    private var notificationLines = emptyArray<String>()
+    private var cardLayout = -1
+    private var cardLeft = 0f
+    private var cardTop = 0f
+    private var cardW = 0f
+    private var cardSize = 18f
+    private var cardStep = 23f
 
     fun prepare(next: HudState) {
         val old = s
@@ -234,10 +240,24 @@ class HudRenderer(context: Context) {
             alertAge=if(a.reportedAtMs>0) "Reported ${((next.nowMs-a.reportedAtMs).coerceAtLeast(0)/60_000)} min ago" else a.source
         }
         next.detour?.let { d -> detourSaving="Save ${Format.duration(d.savesSeconds)}"; detourVia=ellipsize("${d.via} · +${Format.distance(d.extraMeters,next.units)}",20f,284f) }
-        next.notification?.let { n -> if(n!==old.notification) {
-            notificationApp=ellipsize(n.app.uppercase(),14f,CARD_W-32f)
-            notificationTitle=ellipsize(n.title,20f,CARD_W-32f);notificationText=ellipsize(n.text,17f,CARD_W-32f)
-        }}
+        // Card layout: with no trip it is wide and tall (nothing else to protect); on a trip the corner
+        // view keeps it to the right of the turn arrow, and the big map view has the whole width.
+        next.notification?.let { n ->
+            val idle=next.navState==NavState.IDLE || next.navState==NavState.ENDED
+            val corner=next.mode!=HudMode.Map
+            val layout=(if(idle)1 else 0)+(if(corner)2 else 0)
+            if(n!==old.notification || layout!=cardLayout) {
+                cardLayout=layout
+                cardLeft=if(corner && idle)18f else if(corner)240f else 14f
+                cardTop=if(corner)410f else if(idle)90f else 124f
+                cardW=if(corner && !idle)222f else if(corner)444f else 452f
+                cardSize=if(corner && !idle)16f else 18f
+                cardStep=cardSize+5f
+                notificationApp=ellipsize(n.app.uppercase(),14f,cardW-32f)
+                notificationTitle=ellipsize(n.title,20f,cardW-40f)
+                notificationLines=wrap(n.text,cardSize,cardW-32f,if(idle)6 else 4)
+            }
+        }
         destination=ellipsize(next.destinationName,26f,420f)
         val along=next.position?.metersAlongRoute ?: 0
         val jam=next.traffic.firstOrNull { it.level==TrafficLevel.JAM && it.endMeters>along }
@@ -306,7 +326,7 @@ class HudRenderer(context: Context) {
         return value.take(count)+"…"
     }
 
-    fun draw(c:Canvas,nanos:Long){drawExpanded(c,nanos);notificationCard(c,14f,124f)}
+    fun draw(c:Canvas,nanos:Long){drawExpanded(c,nanos);notificationCard(c)}
     private fun drawExpanded(c:Canvas,nanos:Long) {
         if(!s.linkConnected && s.navState!=NavState.IDLE && s.navState!=NavState.ENDED) {
             text(c,"Phone disconnected",18f,340f,24f)
@@ -322,8 +342,11 @@ class HudRenderer(context: Context) {
             s.navState==NavState.ARRIVED -> arrived(c)
             s.navState==NavState.IDLE || s.navState==NavState.ENDED -> {
                 // Home screen: the session now stays open without a trip, so notifications can arrive here.
-                center(c,"Rokid Nav",240f,184f,44f,b=true); center(c,if(s.linkConnected)"Ready" else "Phone not connected",240f,226f,24f,180)
-                center(c,"Start a trip on your phone",240f,258f,20f,140)
+                // A notification card replaces it completely.
+                if(s.notification==null) {
+                    center(c,"Rokid Nav",240f,184f,44f,b=true); center(c,if(s.linkConnected)"Ready" else "Phone not connected",240f,226f,24f,180)
+                    center(c,"Start a trip on your phone",240f,258f,20f,140)
+                }
             }
             else -> {
                 banner(c)
@@ -337,12 +360,14 @@ class HudRenderer(context: Context) {
         }
     }
     /** Corner layout: upper 62% stays transparent; map labels are available in expanded mode. */
-    fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);notificationCard(c,240f,422f)}
+    fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);notificationCard(c)}
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
-            text(c,"Rokid Nav",18f,574f,24f)
-            text(c,if(s.linkConnected)"Ready" else "Phone not connected",18f,600f,18f,153)
-            text(c,"Start a trip on your phone",18f,624f,18f,153)
+            if(s.notification==null) {
+                text(c,"Rokid Nav",18f,574f,24f)
+                text(c,if(s.linkConnected)"Ready" else "Phone not connected",18f,600f,18f,153)
+                text(c,"Start a trip on your phone",18f,624f,18f,153)
+            }
             return
         }
         if(s.navState==NavState.ARRIVED) {
@@ -688,13 +713,30 @@ class HudRenderer(context: Context) {
         box(c,30f,264f,69f,287f,6f,fill=true);text(c,"TAP",37f,281f,15f,b=true,black=true);text(c,"take it",76f,282f,18f)
         box(c,159f,264f,218f,287f,6f,alpha=191);text(c,"2× TAP",165f,281f,15f,191,b=true);text(c,"keep",227f,282f,18f,191)
     }
-    /** Phone notification: app, title, one line of text. Black fill hides what is under it; a detour wins. */
-    private fun notificationCard(c:Canvas,left:Float,top:Float) {
+    /** Phone notification: app, title, wrapped text. Black fill hides what is under it; a detour wins. */
+    private fun notificationCard(c:Canvas) {
         if(s.notification==null || s.detour!=null) return
-        box(c,left,top,left+CARD_W,top+96f,12f,fill=true,black=true);box(c,left,top,left+CARD_W,top+96f,12f)
-        text(c,notificationApp,left+16f,top+24f,14f,179,b=true)
-        text(c,notificationTitle,left+16f,top+52f,20f,b=true)
-        text(c,notificationText,left+16f,top+80f,17f,217)
+        val lines=notificationLines.size
+        val height=if(lines==0)62f else 92f+(lines-1)*cardStep
+        box(c,cardLeft,cardTop,cardLeft+cardW,cardTop+height,12f,fill=true,black=true)
+        box(c,cardLeft,cardTop,cardLeft+cardW,cardTop+height,12f)
+        text(c,notificationApp,cardLeft+16f,cardTop+24f,14f,179,b=true)
+        text(c,notificationTitle,cardLeft+16f,cardTop+52f,20f,b=true)
+        for(i in 0 until lines)text(c,notificationLines[i],cardLeft+16f,cardTop+80f+i*cardStep,cardSize,217)
+    }
+    /** Splits [value] at spaces into at most [maxLines] lines that fit [width]; the last one ends in "…" if cut. */
+    private fun wrap(value:String,size:Float,width:Float,maxLines:Int):Array<String> {
+        val lines=ArrayList<String>(maxLines)
+        var rest=value.trim()
+        while(rest.isNotEmpty() && lines.size<maxLines) {
+            val fit=paint(size).breakText(rest,true,width,null)
+            if(fit>=rest.length){lines+=rest;break}
+            if(lines.size==maxLines-1){lines+=ellipsize(rest,size,width);break}
+            val cut=rest.lastIndexOf(' ',fit).takeIf {it>0} ?: fit
+            lines+=rest.substring(0,cut).trimEnd()
+            rest=rest.substring(cut).trimStart()
+        }
+        return lines.toTypedArray()
     }
     private fun arrived(c:Canvas) {
         c.drawCircle(240f,112f,42f,paint(stroke=6f));c.drawLine(221f,114f,234f,127f,paint(stroke=6f));c.drawLine(234f,127f,260f,99f,paint(stroke=6f))
@@ -722,8 +764,6 @@ class HudRenderer(context: Context) {
         private const val LABEL_MAJOR = 18f
         private const val LABEL_MINOR = 17f
         const val ALERT_FRESH_MS = 6_000L
-        /** Notification card width: fits over the corner map (compact) without covering the turn. */
-        private const val CARD_W = 226f
         private val SPACES = Regex("\\s+")
         private val NAME_ABBREVIATIONS = listOf("street" to "st","avenue" to "ave","boulevard" to "blvd","road" to "rd",
             "drive" to "dr","lane" to "ln","place" to "pl","court" to "ct","highway" to "hwy","parkway" to "pkwy",

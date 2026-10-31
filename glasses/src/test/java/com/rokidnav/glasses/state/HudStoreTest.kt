@@ -133,7 +133,16 @@ class HudStoreTest {
         assertNull(hud.state.value.notification)
         assertEquals(HudMode.Compact,hud.state.value.mode)
         hud.onMessage(com.rokidnav.protocol.PhoneNotification(2,"n2","Mail","Bill","Due"))
-        now+=HudStore.NOTIFICATION_SHOW_MS;hud.tick()
+        now+=HudStore.NOTIFICATION_MIN_MS;hud.tick()
         assertNull(hud.state.value.notification)
+    }
+
+    @Test fun longerNotificationsStayLongerUpToTheMaximum() {
+        val short=com.rokidnav.protocol.PhoneNotification(1,"a","App","Sam","On my way")
+        val long=short.copy(text="x".repeat(120))
+        val huge=short.copy(text="x".repeat(5_000))
+        assertEquals(HudStore.NOTIFICATION_MIN_MS,HudStore.notificationMillis(short))
+        assertEquals(true,HudStore.notificationMillis(long)>HudStore.NOTIFICATION_MIN_MS)
+        assertEquals(HudStore.NOTIFICATION_MAX_MS,HudStore.notificationMillis(huge))
     }
 }

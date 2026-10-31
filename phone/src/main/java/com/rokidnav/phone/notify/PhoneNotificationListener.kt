@@ -22,8 +22,9 @@ class PhoneNotificationListener : NotificationListenerService() {
             category = sbn.notification.category.orEmpty(),
             ongoing = sbn.notification.flags and Notification.FLAG_ONGOING_EVENT != 0,
             groupSummary = sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0,
-            title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
-            text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty(),
+            title = oneLine(extras.getCharSequence(Notification.EXTRA_TITLE)),
+            // BigText holds the whole message; EXTRA_TEXT is often cut to one line by the app.
+            text = oneLine(extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT)),
         )
         // No notification text in logs: only the package and the decision.
         if (!NotificationFilter.shouldForward(notice)) {
@@ -35,7 +36,7 @@ class PhoneNotificationListener : NotificationListenerService() {
         RokidNavApp.instance.coordinator.forwardNotification(
             id = sbn.key,
             app = appLabel(sbn.packageName),
-            // Payload size is undocumented; the card shows one line of each anyway.
+            // Payload size is undocumented; these limits are well under the route chunks we already send.
             title = notice.title.take(MAX_TITLE),
             text = notice.text.take(MAX_TEXT),
             postedAtMs = sbn.postTime,
@@ -50,9 +51,13 @@ class PhoneNotificationListener : NotificationListenerService() {
         packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
     }.getOrDefault(pkg)
 
+    /** Line breaks and runs of spaces become one space: the glasses wrap the text themselves. */
+    private fun oneLine(value: CharSequence?): String = value?.toString().orEmpty().replace(SPACES, " ").trim()
+
     private companion object {
         const val TAG = "RokidNavNotify"
-        const val MAX_TITLE = 40
-        const val MAX_TEXT = 120
+        const val MAX_TITLE = 60
+        const val MAX_TEXT = 300
+        val SPACES = Regex("\\s+")
     }
 }
