@@ -99,9 +99,9 @@ The old "Rokid Nav / Ready / Start a trip" screen is gone. After a card expires 
 what is left in that list, never the old screen.
 
 **Media screen.** App name 18/700 caps @70% and a state icon (two bars playing, triangle paused) in the
-top-right; track title 34/700, wrapped to two lines; artist 26/600; 6 px progress bar (@25% track, solid
-fill); elapsed and total time 24/600. Corner view top 408, expanded top 110, width 444. The bar and times
-redraw every 5 s (battery); a track change, play/pause or seek redraws at once.
+top-right; track title 34/700, wrapped to two lines; artist 28/600. No progress bar and no times (user decision
+2026-10-31): nothing on the screen moves, so the HUD redraws only when the track or the play state
+changes (a seek or resync redraws nothing). Corner view top 408, expanded top 110, width 444.
 Input: **tap** play/pause, **swipe forward** next, **swipe back** previous. They act on the phone's active
 media session (Spotify, YouTube Music, ...). On a trip these gestures keep their trip meaning and the
 media screen is not shown. The phone reads the session through Notification access.

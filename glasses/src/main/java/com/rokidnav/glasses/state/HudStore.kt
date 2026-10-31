@@ -64,7 +64,9 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                     alertSeenAt=if(tripOver)emptyMap() else it.alertSeenAt)}
             }
             is SettingsUpdate->mutable.update {it.copy(voiceMuted=m.voiceMuted,units=m.units,mapZoom=m.mapZoomLevel.coerceIn(0,2),demoMode=m.demoMode)}
-            is MediaState->mutable.update {it.copy(media=m.takeIf {it.active},mediaAt=clock(),nowMs=clock())}
+            // Position-only changes (a seek, a resync) change nothing on screen, so they do not redraw.
+            is MediaState->mutable.update {s->val next=m.takeIf {it.active}
+                if(sameOnScreen(s.media,next))s else s.copy(media=next)}
             is PhoneNotification->mutable.update {it.copy(notification=m,notificationShownAt=clock())}
             else->Unit
         }
@@ -100,7 +102,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             idleMedia(s) && key==GlassesKey.TAP->{
                 sendAction(GlassesAction(0,ActionType.MEDIA_PLAY_PAUSE))
                 // Optimistic: the bar and the icon change now; the phone's answer corrects them.
-                mutable.update {it.copy(media=it.media?.copy(playing=!it.media.playing,positionMs=it.mediaPositionMs()),mediaAt=clock(),nowMs=clock())}
+                mutable.update {it.copy(media=it.media?.copy(playing=!it.media.playing))}
             }
             idleMedia(s) && key==GlassesKey.SWIPE_FORWARD->sendAction(GlassesAction(0,ActionType.MEDIA_NEXT))
             idleMedia(s) && key==GlassesKey.SWIPE_BACK->sendAction(GlassesAction(0,ActionType.MEDIA_PREVIOUS))
@@ -112,6 +114,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         }
         return true
     }
+    private fun sameOnScreen(a:MediaState?,b:MediaState?)=if(a==null || b==null)a==b else
+        a.app==b.app && a.title==b.title && a.artist==b.artist && a.playing==b.playing
     private fun idleMedia(s:HudState)=s.media!=null && s.notification==null && (s.navState==NavState.IDLE || s.navState==NavState.ENDED)
     private fun mode(value:HudMode){mutable.update {it.copy(mode=value)}}
     fun tick(now:Long=clock()) {
@@ -128,17 +132,13 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
             // Otherwise an unchanged state is not re-emitted, so an idle HUD does not redraw every second.
-            // A playing track moves its bar every MEDIA_BAR_MS; that is the only reason to redraw for it.
-            val barMoves=s.media?.playing==true && now/MEDIA_BAR_MS!=s.nowMs/MEDIA_BAR_MS
-            if(s.alerts.isEmpty() && s.detour==null && !barMoves && n==s.copy(nowMs=now))s else n}
+            if(s.alerts.isEmpty() && s.detour==null && n==s.copy(nowMs=now))s else n}
     }
     suspend fun tickLoop(){while(true){tick();delay(1000)}}
     companion object {
         const val ALERT_STALE_MS=120_000L
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L
-        /** Battery: the progress bar of a long track moves a pixel or two in this time. */
-        const val MEDIA_BAR_MS=5_000L
         /** How long a card stays: longer text stays longer, but never past the maximum (driver safety). */
         const val NOTIFICATION_MIN_MS=6_000L
         const val NOTIFICATION_MAX_MS=15_000L

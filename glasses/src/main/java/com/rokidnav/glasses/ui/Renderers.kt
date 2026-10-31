@@ -87,9 +87,6 @@ class HudRenderer(context: Context) {
     private var mediaApp = ""
     private var mediaTitle = emptyArray<String>()
     private var mediaArtist = ""
-    private var mediaElapsed = ""
-    private var mediaTotal = ""
-    private var mediaFraction = 0f
     private val playTriangle = Path().apply { moveTo(0f,0f); lineTo(0f,24f); lineTo(21f,12f); close() }
     private var notificationLines = emptyArray<String>()
     private var cardLayout = -1
@@ -266,12 +263,8 @@ class HudRenderer(context: Context) {
             }
         }
         next.media?.let { m ->
-            val position=next.mediaPositionMs()
             mediaApp=m.app.uppercase()
             mediaTitle=wrap(m.title,34f,MEDIA_W-8f,2);mediaArtist=ellipsize(m.artist,26f,MEDIA_W)
-            mediaElapsed=Format.clock(position)
-            mediaTotal=if(m.durationMs>0)Format.clock(m.durationMs) else ""
-            mediaFraction=if(m.durationMs>0)position/m.durationMs.toFloat() else 0f
         }
         destination=ellipsize(next.destinationName,26f,420f)
         val along=next.position?.metersAlongRoute ?: 0
@@ -728,7 +721,7 @@ class HudRenderer(context: Context) {
         box(c,30f,264f,69f,287f,6f,fill=true);text(c,"TAP",37f,281f,15f,b=true,black=true);text(c,"take it",76f,282f,18f)
         box(c,159f,264f,218f,287f,6f,alpha=191);text(c,"2× TAP",165f,281f,15f,191,b=true);text(c,"keep",227f,282f,18f,191)
     }
-    /** Now playing: app and play state, track, artist, progress bar with times. Tap/swipes are in HudStore. */
+    /** Now playing: app and play state, track, artist. No bar or times: nothing moves, so nothing redraws. */
     private fun media(c:Canvas,left:Float,top:Float) {
         val right=left+MEDIA_W
         text(c,mediaApp,left,top+20f,18f,179,b=true)
@@ -741,14 +734,7 @@ class HudRenderer(context: Context) {
         var y=top+64f
         for(i in mediaTitle.indices){text(c,mediaTitle[i],left,y,34f,b=true);y+=40f}
         y-=40f
-        text(c,mediaArtist,left,y+38f,26f,224)
-        val barY=y+68f
-        if(mediaTotal.isNotEmpty()) {
-            c.drawLine(left,barY,right,barY,paint(alpha=64,stroke=6f))
-            c.drawLine(left,barY,left+MEDIA_W*mediaFraction.coerceIn(0f,1f),barY,paint(stroke=6f))
-        }
-        text(c,mediaElapsed,left,barY+34f,24f,217)
-        if(mediaTotal.isNotEmpty())right(c,mediaTotal,right,barY+34f,24f,217)
+        text(c,mediaArtist,left,y+40f,28f,224)
     }
     /** Phone notification: app, title, wrapped text. Black fill hides what is under it; a detour wins. */
     private fun notificationCard(c:Canvas) {

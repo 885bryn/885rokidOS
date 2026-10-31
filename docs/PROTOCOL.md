@@ -56,7 +56,7 @@ and opens a new session, which installs and opens the bundled APK. Tried once pe
 | `detour_offer` / `detour_resolved` | rare | faster route offer; expires at `expiresAtMs` |
 | `nav_state` | on change | IDLE/ROUTING/ACTIVE/REROUTING/GPS_LOST/ARRIVED/ENDED |
 | `settings` | on change | voice muted, units, zoom, brightnessPercent (default 35, ignored), demoMode (default false: 30 fps map) |
-| `media` | track, play state or seek changes; resync | active (false = nothing playing), app, title, artist, playing, positionMs (at send time; the glasses extrapolate while playing), durationMs (0 = unknown). Not part of the `lastSent` cache: resync sends it with the position moved forward. |
+| `media` | track, play state or seek changes; resync | active (false = nothing playing), app, title, artist, playing, positionMs (at send time) and durationMs (0 = unknown); the glasses ignore both since the HUD has no bar, and a message that changes only the position does not redraw. Not part of the `lastSent` cache: resync sends it with the position moved forward. |
 | `notification` | phone notification posted (only while the link is Ready) | id, app, title, text, postedAtMs. Shown as a short card; never resent on resync. |
 
 ## Glasses → phone

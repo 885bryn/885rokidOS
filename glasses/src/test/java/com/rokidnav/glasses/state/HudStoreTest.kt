@@ -171,18 +171,19 @@ class HudStoreTest {
         assertNull(hud.state.value.media)
     }
 
-    @Test fun mediaPositionAdvancesWhilePlayingAndTheBarRedrawsEveryFiveSeconds() {
+    @Test fun mediaOnlyRedrawsWhenWhatIsOnScreenChanges() {
         var now=10_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onMessage(media(1,position=60_000))
-        // Battery: no redraw before the 5 s bar step, so the stored position still reads the arrival value.
-        now+=2_000;hud.tick()
         val first=hud.state.value
-        assertEquals(60_000L,first.mediaPositionMs())
-        now+=3_000;hud.tick()
-        assertEquals(65_000L,hud.state.value.mediaPositionMs())
-        hud.onMessage(media(2,playing=false,position=90_000))
-        now+=30_000;hud.tick()
-        assertEquals(90_000L,hud.state.value.mediaPositionMs())
+        // A seek or a resync changes only the position: same state object, so no redraw.
+        hud.onMessage(media(2,position=150_000))
+        now+=60_000;hud.tick()
+        assertEquals(true,hud.state.value.media===first.media)
+        // Pausing, or a new track, does change the screen.
+        hud.onMessage(media(3,playing=false))
+        assertEquals(false,hud.state.value.media?.playing)
+        hud.onMessage(media(4,playing=false).copy(title="Other song"))
+        assertEquals("Other song",hud.state.value.media?.title)
     }
 }

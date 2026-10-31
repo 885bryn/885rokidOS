@@ -15,7 +15,7 @@ body{margin:0}
 </helmet>
 <!-- Idle screen while the phone plays music and no trip runs (expanded 480x398 view; the corner view uses the
      same block at y=408 of 640). Tap = play/pause, swipe forward = next, swipe back = previous.
-     Sizes: app 18/700, title 34/700 (two lines max), artist 26/600, times 24/600, bar 6 px. -->
+     Sizes: app 18/700, title 34/700 (two lines max), artist 28/600. No bar or times: nothing moves, so no redraws. -->
 <div style="width: 480px; height: 398px; background: #000; color: {{g}}; font-family: 'Barlow Semi Condensed', sans-serif; font-variant-numeric: tabular-nums; position: relative; overflow: hidden">
 <div style="position: absolute; left: 18px; top: 110px; width: 444px">
 <div style="display: flex; justify-content: space-between; align-items: center; height: 26px">
@@ -23,10 +23,7 @@ body{margin:0}
 <svg width="24" height="26" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" role="img" aria-label="Playing"><path d="M5 2 V24"></path><path d="M19 2 V24"></path></svg>
 </div>
 <div style="margin-top: 14px; font-size: 34px; font-weight: 700; line-height: 40px">Midnight City</div>
-<div style="font-size: 26px; font-weight: 600; line-height: 34px; opacity: 0.88">M83</div>
-<div style="margin-top: 20px; height: 6px; background-color: currentColor; opacity: 0.25; border-radius: 3px; position: relative"></div>
-<div style="margin-top: -6px; width: 168px; height: 6px; background-color: currentColor; border-radius: 3px"></div>
-<div style="margin-top: 10px; display: flex; justify-content: space-between; font-size: 24px; font-weight: 600; opacity: 0.85"><span>1:25</span><span>4:03</span></div>
+<div style="font-size: 28px; font-weight: 600; line-height: 36px; opacity: 0.88">M83</div>
 </div>
 </div>
 </x-dc>

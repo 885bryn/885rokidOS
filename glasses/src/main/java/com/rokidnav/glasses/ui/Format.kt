@@ -20,12 +20,6 @@ object Format {
         } else if (m < 1000) "${(m / 10.0).roundToInt() * 10} m"
         else String.format(Locale.US, if (m < 10_000) "%.1f km" else "%.0f km", m / 1000.0)
     }
-    /** Track time: m:ss, or h:mm:ss from one hour. */
-    fun clock(ms: Long): String {
-        val total = (ms.coerceAtLeast(0) / 1000).toInt()
-        return if (total >= 3600) String.format(Locale.US, "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
-        else String.format(Locale.US, "%d:%02d", total / 60, total % 60)
-    }
     fun duration(seconds: Int): String {
         val minutes = (seconds.coerceAtLeast(0) + 59) / 60
         return if (minutes < 60) "$minutes min" else "${minutes / 60} h ${minutes % 60} min"
