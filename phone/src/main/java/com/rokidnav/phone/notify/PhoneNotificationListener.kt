@@ -43,6 +43,11 @@ class PhoneNotificationListener : NotificationListenerService() {
         )
     }
 
+    /** Notification access was just granted (or the service restarted): media sessions are now readable. */
+    override fun onListenerConnected() {
+        RokidNavApp.instance.media.start()
+    }
+
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         lastSent.remove(sbn.key)
     }

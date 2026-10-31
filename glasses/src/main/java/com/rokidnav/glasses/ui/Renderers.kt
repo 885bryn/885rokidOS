@@ -84,6 +84,13 @@ class HudRenderer(context: Context) {
     private var jamLabel = ""
     private var notificationApp = ""
     private var notificationTitle = ""
+    private var mediaApp = ""
+    private var mediaTitle = ""
+    private var mediaArtist = ""
+    private var mediaElapsed = ""
+    private var mediaTotal = ""
+    private var mediaFraction = 0f
+    private val playTriangle = Path().apply { moveTo(0f,0f); lineTo(0f,24f); lineTo(21f,12f); close() }
     private var notificationLines = emptyArray<String>()
     private var cardLayout = -1
     private var cardLeft = 0f
@@ -258,6 +265,14 @@ class HudRenderer(context: Context) {
                 notificationLines=wrap(n.text,cardSize,cardW-32f,if(idle)6 else 4)
             }
         }
+        next.media?.let { m ->
+            val position=next.mediaPositionMs()
+            mediaApp=m.app.uppercase()
+            mediaTitle=ellipsize(m.title,32f,400f);mediaArtist=ellipsize(m.artist,24f,420f)
+            mediaElapsed=Format.clock(position)
+            mediaTotal=if(m.durationMs>0)Format.clock(m.durationMs) else ""
+            mediaFraction=if(m.durationMs>0)position/m.durationMs.toFloat() else 0f
+        }
         destination=ellipsize(next.destinationName,26f,420f)
         val along=next.position?.metersAlongRoute ?: 0
         val jam=next.traffic.firstOrNull { it.level==TrafficLevel.JAM && it.endMeters>along }
@@ -342,10 +357,11 @@ class HudRenderer(context: Context) {
             s.navState==NavState.ARRIVED -> arrived(c)
             s.navState==NavState.IDLE || s.navState==NavState.ENDED -> {
                 // Home screen: the session now stays open without a trip, so notifications can arrive here.
-                // A notification card replaces it completely.
+                // No trip: the screen is the player when music plays, otherwise black (transparent). A
+                // notification card replaces it. Only a lost phone link says anything.
                 if(s.notification==null) {
-                    center(c,"Rokid Nav",240f,184f,44f,b=true); center(c,if(s.linkConnected)"Ready" else "Phone not connected",240f,226f,24f,180)
-                    center(c,"Start a trip on your phone",240f,258f,20f,140)
+                    if(s.media!=null) media(c,18f,110f)
+                    else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,26f,180)
                 }
             }
             else -> {
@@ -364,9 +380,8 @@ class HudRenderer(context: Context) {
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
             if(s.notification==null) {
-                text(c,"Rokid Nav",18f,574f,24f)
-                text(c,if(s.linkConnected)"Ready" else "Phone not connected",18f,600f,18f,153)
-                text(c,"Start a trip on your phone",18f,624f,18f,153)
+                if(s.media!=null) media(c,18f,408f)
+                else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,24f,180)
             }
             return
         }
@@ -713,6 +728,25 @@ class HudRenderer(context: Context) {
         box(c,30f,264f,69f,287f,6f,fill=true);text(c,"TAP",37f,281f,15f,b=true,black=true);text(c,"take it",76f,282f,18f)
         box(c,159f,264f,218f,287f,6f,alpha=191);text(c,"2× TAP",165f,281f,15f,191,b=true);text(c,"keep",227f,282f,18f,191)
     }
+    /** Now playing: app and play state, track, artist, progress bar with times. Tap/swipes are in HudStore. */
+    private fun media(c:Canvas,left:Float,top:Float) {
+        val right=left+MEDIA_W
+        text(c,mediaApp,left,top+20f,17f,179,b=true)
+        // The icon shows what a tap does: bars while playing would mean "pause", so show the state instead.
+        if(s.media?.playing==true) {
+            c.drawLine(right-22f,top+2f,right-22f,top+24f,paint(stroke=6f));c.drawLine(right-8f,top+2f,right-8f,top+24f,paint(stroke=6f))
+        } else {
+            c.save();c.translate(right-24f,top+1f);c.drawPath(playTriangle,paint());c.restore()
+        }
+        text(c,mediaTitle,left,top+62f,32f,b=true)
+        text(c,mediaArtist,left,top+98f,24f,217)
+        if(mediaTotal.isNotEmpty()) {
+            c.drawLine(left,top+124f,right,top+124f,paint(alpha=64,stroke=5f))
+            c.drawLine(left,top+124f,left+MEDIA_W*mediaFraction.coerceIn(0f,1f),top+124f,paint(stroke=5f))
+        }
+        text(c,mediaElapsed,left,top+158f,22f,204)
+        if(mediaTotal.isNotEmpty())right(c,mediaTotal,right,top+158f,22f,204)
+    }
     /** Phone notification: app, title, wrapped text. Black fill hides what is under it; a detour wins. */
     private fun notificationCard(c:Canvas) {
         if(s.notification==null || s.detour!=null) return
@@ -764,6 +798,7 @@ class HudRenderer(context: Context) {
         private const val LABEL_MAJOR = 18f
         private const val LABEL_MINOR = 17f
         const val ALERT_FRESH_MS = 6_000L
+        private const val MEDIA_W = 444f
         private val SPACES = Regex("\\s+")
         private val NAME_ABBREVIATIONS = listOf("street" to "st","avenue" to "ave","boulevard" to "blvd","road" to "rd",
             "drive" to "dr","lane" to "ln","place" to "pl","court" to "ct","highway" to "hwy","parkway" to "pkwy",

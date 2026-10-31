@@ -41,6 +41,8 @@ class RokidNavApp : Application() {
         private set
     lateinit var traffic:TrafficMonitor
         private set
+    lateinit var media:com.rokidnav.phone.media.MediaMonitor
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -50,6 +52,7 @@ class RokidNavApp : Application() {
         routesApi = RoutesApiClient(BuildConfig.ROUTES_API_KEY,androidPackage=packageName,androidCert=RoutesApiClient.signingCertificate(this))
         settings=com.rokidnav.phone.settings.SettingsRepository(this)
         traffic=TrafficMonitor(routesApi,navEngine)
+        media=com.rokidnav.phone.media.MediaMonitor(this)
         policeProvider=WzSabrePoliceProvider(AndroidSabreClient(this), navEngine.position)
         coordinator = NavSessionCoordinator(
             scope = appScope,
@@ -65,8 +68,10 @@ class RokidNavApp : Application() {
             settings=settings,
             roads = com.rokidnav.phone.map.RoadContextProvider(java.io.File(cacheDir, "streets")),
             speaker = com.rokidnav.phone.alerts.AndroidAlertSpeaker(this),
+            media = media,
         )
         coordinator.start()
+        media.start()
         appScope.launch {glassesLink.state.map(GlassesLinkService::wanted).distinctUntilChanged().collect {
             GlassesLinkService.sync(this@RokidNavApp,glassesLink.state.value)
         }}

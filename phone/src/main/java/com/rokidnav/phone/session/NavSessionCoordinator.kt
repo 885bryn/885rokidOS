@@ -14,7 +14,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val engine:NavigationEngine,private val traffic:TrafficMonitor,private val incidents:IncidentProvider,
     private val roads:com.rokidnav.phone.map.RoadContextProvider?=null,
     private val settings:SettingsRepository?=null,
-    private val speaker:AlertSpeaker?=null) {
+    private val speaker:AlertSpeaker?=null,
+    private val media:com.rokidnav.phone.media.MediaSource?=null) {
     private val seq=SeqCounter()
     private val announcer=AlertAnnouncer({preferences})
     private val lastSent=linkedMapOf<String,NavMessage>()
@@ -25,6 +26,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val offer=MutableStateFlow<DetourOffer?>(null)
     val detour=offer.asStateFlow()
     private var preferences=UserSettings()
+    private var lastMedia:MediaState?=null
+    private var lastMediaAt=0L
     fun sendTestSnapshot(build:(()->Long)->List<NavMessage>) {
         if(link.state.value==LinkState.Ready)build(seq::next).forEach {link.send(it)}
     }
@@ -94,6 +97,7 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         scope.launch {engine.navState.map {it==NavState.ACTIVE}.distinctUntilChanged().collect {
             if(it)reconnectIfAllowed()
         }}
+        if(media!=null)scope.launch {media.info.collect(::sendMedia)}
         traffic.start(scope)
     }
     /** The phone app came to the front: reopen the glasses session when the token allows it. */
@@ -127,7 +131,18 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private fun sendRoute(){engine.activeRoute.value?.let {route->
         RouteChunker.split(route.routeId,route.encodedPolyline,route.totalMeters,seq::next).forEach {link.send(it)}
     }}
+    /** Not in [lastSent]: a resync must move the position forward, or the glasses' progress bar jumps back. */
+    private fun sendMedia(info:com.rokidnav.phone.media.MediaInfo?) {
+        val message=if(info==null)MediaState(seq.next(),active=false)
+            else MediaState(seq.next(),true,info.app,info.title.take(120),info.artist.take(120),info.playing,info.positionMs,info.durationMs)
+        lastMedia=message;lastMediaAt=System.currentTimeMillis()
+        link.send(message)
+    }
     private fun resync() {
+        lastMedia?.let {m->
+            val elapsed=if(m.playing)System.currentTimeMillis()-lastMediaAt else 0L
+            link.send(m.copy(seq=seq.next(),positionMs=(m.positionMs+elapsed).let {p->if(m.durationMs>0)p.coerceAtMost(m.durationMs) else p}))
+        }
         lastSent["session"]?.let {link.send(fresh(it))};sendRoute()
         lastSent.filterKeys {it!="session"}.values.forEach {link.send(fresh(it))}
         offer.value?.takeIf {it.expiresAtMs>System.currentTimeMillis()}?.let {link.send(it.copy(seq=seq.next()))}
@@ -186,6 +201,9 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
             // The glasses keep their own Rokid brightness; older HUDs may still send this.
             ActionType.CYCLE_BRIGHTNESS->Unit
             ActionType.SHOW_ALTERNATIVES->traffic.forceRefresh()
+            ActionType.MEDIA_PLAY_PAUSE->media?.playPause()
+            ActionType.MEDIA_NEXT->media?.next()
+            ActionType.MEDIA_PREVIOUS->media?.previous()
         }
     }
 }

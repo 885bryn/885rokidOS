@@ -145,4 +145,44 @@ class HudStoreTest {
         assertEquals(true,HudStore.notificationMillis(long)>HudStore.NOTIFICATION_MIN_MS)
         assertEquals(HudStore.NOTIFICATION_MAX_MS,HudStore.notificationMillis(huge))
     }
+
+    private fun media(seq:Long,playing:Boolean=true,position:Long=10_000)=
+        com.rokidnav.protocol.MediaState(seq,true,"Spotify","Song","Artist",playing,position,200_000)
+
+    @Test fun idleMediaScreenTapsPlayPauseAndSwipesSkip() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(media(1))
+        hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD);hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(listOf(ActionType.MEDIA_PLAY_PAUSE,ActionType.MEDIA_NEXT,ActionType.MEDIA_PREVIOUS),sent.map {it.action})
+        // The icon follows the tap at once; the view mode does not change.
+        assertEquals(false,hud.state.value.media?.playing)
+        assertEquals(HudMode.Compact,hud.state.value.mode)
+    }
+
+    @Test fun mediaKeysDoNothingOnATripOrWithoutMusic() {
+        val hud=HudStore {sent+=it}
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        hud.onMessage(media(1));hud.onMessage(com.rokidnav.protocol.NavStateUpdate(2,com.rokidnav.protocol.NavState.ACTIVE))
+        hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.ZOOM_IN),sent.map {it.action})
+        assertEquals(HudMode.Map,hud.state.value.mode)
+        hud.onMessage(com.rokidnav.protocol.MediaState(3,active=false))
+        assertNull(hud.state.value.media)
+    }
+
+    @Test fun mediaPositionAdvancesWhilePlayingAndTheBarRedrawsEveryFiveSeconds() {
+        var now=10_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(media(1,position=60_000))
+        // Battery: no redraw before the 5 s bar step, so the stored position still reads the arrival value.
+        now+=2_000;hud.tick()
+        val first=hud.state.value
+        assertEquals(60_000L,first.mediaPositionMs())
+        now+=3_000;hud.tick()
+        assertEquals(65_000L,hud.state.value.mediaPositionMs())
+        hud.onMessage(media(2,playing=false,position=90_000))
+        now+=30_000;hud.tick()
+        assertEquals(90_000L,hud.state.value.mediaPositionMs())
+    }
 }

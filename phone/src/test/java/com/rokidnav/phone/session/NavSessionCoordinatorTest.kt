@@ -78,6 +78,37 @@ class NavSessionCoordinatorTest {
         coordinator.onAppOpened(); runCurrent()
         assertEquals(1, link.connects)
     }
+    private class FakeMedia : com.rokidnav.phone.media.MediaSource {
+        val flow = MutableStateFlow<com.rokidnav.phone.media.MediaInfo?>(null)
+        override val info = flow
+        val calls = mutableListOf<String>()
+        override fun playPause() { calls += "playPause" }
+        override fun next() { calls += "next" }
+        override fun previous() { calls += "previous" }
+    }
+    @Test fun sendsMediaStateAndResyncsItAndRoutesGlassesControls() = runTest {
+        val engine = Engine()
+        val link = Link()
+        val media = FakeMedia()
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents, media = media)
+        coordinator.start(); runCurrent()
+        media.flow.value = com.rokidnav.phone.media.MediaInfo("Spotify", "Song", "Artist", true, 10_000, 200_000); runCurrent()
+        assertEquals("Song", link.sent.filterIsInstance<MediaState>().last().title)
+        // Reconnect: the same track comes again, with the playing time added.
+        link.sent.clear()
+        link.state.value = LinkState.Paused("bluetooth"); runCurrent()
+        link.state.value = LinkState.Ready; runCurrent()
+        val again = link.sent.filterIsInstance<MediaState>().single()
+        assertEquals("Song", again.title)
+        assertTrue(again.positionMs >= 10_000)
+        media.flow.value = null; runCurrent()
+        assertEquals(false, link.sent.filterIsInstance<MediaState>().last().active)
+        link.incoming.emit(GlassesAction(1, ActionType.MEDIA_PLAY_PAUSE))
+        link.incoming.emit(GlassesAction(2, ActionType.MEDIA_NEXT))
+        link.incoming.emit(GlassesAction(3, ActionType.MEDIA_PREVIOUS))
+        runCurrent()
+        assertEquals(listOf("playPause", "next", "previous"), media.calls)
+    }
     private val noIncidents = object : IncidentProvider {
         override val name = "none"
         override fun incidentsAlong(routePolyline: String) = flowOf(emptyList<Incident>())

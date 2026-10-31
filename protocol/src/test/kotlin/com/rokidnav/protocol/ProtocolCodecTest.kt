@@ -32,6 +32,9 @@ class ProtocolCodecTest {
                 lanes = listOf(Lane(listOf(Maneuver.TURN_LEFT, Maneuver.STRAIGHT), true))), 30, 2),
             Alert(19, "cam1", AlertKind.SPEED_CAMERA, 700, 37.0, -122.0, "Speed camera", "WzSabre", 1700000000000),
             PhoneNotification(22, "n1", "Messages", "Sam", "On my way", 1700000000000),
+            MediaState(23, true, "Spotify", "Song", "Artist", true, 61_000, 215_000),
+            MediaState(24, active = false),
+            GlassesAction(25, ActionType.MEDIA_PLAY_PAUSE),
         )
         for (m in messages) {
             val (magic, body) = ProtocolCodec.encode(m)

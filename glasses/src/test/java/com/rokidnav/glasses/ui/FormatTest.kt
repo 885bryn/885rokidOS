@@ -20,4 +20,10 @@ class FormatTest {
         assertEquals("1:07",Format.eta(time,false,ZoneId.of("UTC")))
         assertEquals("13:07",Format.eta(time,true,ZoneId.of("UTC")))
     }
+    @Test fun trackTimesShowMinutesAndSecondsOrHours() {
+        assertEquals("0:00",Format.clock(-5))
+        assertEquals("1:05",Format.clock(65_900))
+        assertEquals("12:00",Format.clock(720_000))
+        assertEquals("1:02:03",Format.clock(3_723_000))
+    }
 }

@@ -184,6 +184,26 @@ data class PhoneNotification(
     val postedAtMs: Long = 0,
 ) : NavMessage
 
+/**
+ * What the phone is playing (Spotify, YouTube Music, ...), from its active media session. Sent when the
+ * track, play state or position jumps, never as a stream: the glasses extrapolate [positionMs] while
+ * [playing]. [active] = false means nothing is playing any more. Resent on resync with a fresh position.
+ */
+@Serializable @SerialName("media")
+data class MediaState(
+    override val seq: Long,
+    val active: Boolean = true,
+    /** App label, e.g. "Spotify". */
+    val app: String = "",
+    val title: String = "",
+    val artist: String = "",
+    val playing: Boolean = false,
+    /** Position at the moment the phone sent this message. */
+    val positionMs: Long = 0,
+    /** 0 when unknown (streams). */
+    val durationMs: Long = 0,
+) : NavMessage
+
 // ---------------------------------------------------------------- glasses -> phone
 
 @Serializable @SerialName("hello")
@@ -225,6 +245,7 @@ data class ResyncRequest(override val seq: Long, val reason: String = "") : NavM
 @Serializable enum class ActionType {
     ACCEPT_DETOUR, DISMISS_DETOUR, END_NAVIGATION, TOGGLE_VOICE, ZOOM_IN, ZOOM_OUT,
     SHOW_ALTERNATIVES, TOGGLE_UNITS, CYCLE_BRIGHTNESS, CYCLE_ZOOM,
+    MEDIA_PLAY_PAUSE, MEDIA_NEXT, MEDIA_PREVIOUS,
 }
 
 /** Mirrors the Google Navigation SDK maneuver set closely enough to map 1:1 (see NavInfoMapper). */

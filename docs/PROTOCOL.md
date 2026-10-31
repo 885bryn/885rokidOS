@@ -56,6 +56,7 @@ and opens a new session, which installs and opens the bundled APK. Tried once pe
 | `detour_offer` / `detour_resolved` | rare | faster route offer; expires at `expiresAtMs` |
 | `nav_state` | on change | IDLE/ROUTING/ACTIVE/REROUTING/GPS_LOST/ARRIVED/ENDED |
 | `settings` | on change | voice muted, units, zoom, brightnessPercent (default 35, ignored), demoMode (default false: 30 fps map) |
+| `media` | track, play state or seek changes; resync | active (false = nothing playing), app, title, artist, playing, positionMs (at send time; the glasses extrapolate while playing), durationMs (0 = unknown). Not part of the `lastSent` cache: resync sends it with the position moved forward. |
 | `notification` | phone notification posted (only while the link is Ready) | id, app, title, text, postedAtMs. Shown as a short card; never resent on resync. |
 
 ## Glasses → phone
@@ -63,7 +64,7 @@ and opens a new session, which installs and opens the bundled APK. Tried once pe
 |---|---|
 | `hello` | glasses app start; carries display size. Phone replies with a full resync. |
 | `resync` | glasses missed something (e.g. incomplete route chunks after 5 s) |
-| `action` | ACCEPT_DETOUR / DISMISS_DETOUR (with offerId), END_NAVIGATION, TOGGLE_VOICE, ZOOM_IN/OUT, SHOW_ALTERNATIVES, TOGGLE_UNITS, CYCLE_BRIGHTNESS, CYCLE_ZOOM |
+| `action` | ACCEPT_DETOUR / DISMISS_DETOUR (with offerId), END_NAVIGATION, TOGGLE_VOICE, ZOOM_IN/OUT, SHOW_ALTERNATIVES, TOGGLE_UNITS, CYCLE_BRIGHTNESS, CYCLE_ZOOM, MEDIA_PLAY_PAUSE / MEDIA_NEXT / MEDIA_PREVIOUS (control the phone's active media session) |
 | `input` | raw key name, for logs/calibration only |
 
 ## Resync rule

@@ -4,6 +4,7 @@ import com.rokidnav.protocol.Alert
 import com.rokidnav.protocol.DetourOffer
 import com.rokidnav.protocol.LatLng
 import com.rokidnav.protocol.ManeuverUpdate
+import com.rokidnav.protocol.MediaState
 import com.rokidnav.protocol.NavState
 import com.rokidnav.protocol.PhoneNotification
 import com.rokidnav.protocol.PositionUpdate
@@ -40,6 +41,10 @@ data class HudState(
     val notification: PhoneNotification? = null,
     val notificationShownAt: Long = 0,
 
+    /** What the phone plays, or null. [mediaAt] is the glasses clock when it arrived (see [mediaPositionMs]). */
+    val media: MediaState? = null,
+    val mediaAt: Long = 0,
+
     val mode: HudMode = HudMode.Compact,
     val mapZoom: Int = 1,         // 0 = close (~300 m ahead), 1 = default (~800 m), 2 = far (~2 km)
     val voiceMuted: Boolean = false,
@@ -47,6 +52,13 @@ data class HudState(
     val demoMode: Boolean = false,
     val nowMs: Long = 0,
 )
+
+/** Playing position now: the position at arrival plus the time since, while playing. */
+fun HudState.mediaPositionMs(): Long {
+    val m = media ?: return 0
+    val position = m.positionMs + if (m.playing) (nowMs - mediaAt).coerceAtLeast(0) else 0
+    return if (m.durationMs > 0) position.coerceIn(0, m.durationMs) else position.coerceAtLeast(0)
+}
 
 data class HudRoad(val points: List<LatLng>, val name: String, val major: Boolean)
 
