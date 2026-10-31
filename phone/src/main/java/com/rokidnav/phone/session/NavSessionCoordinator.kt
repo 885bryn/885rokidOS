@@ -155,7 +155,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     }
     /** Not cached for resync: a notification only matters when it arrives. Dropped unless the link is Ready. */
     fun forwardNotification(id:String,app:String,title:String,text:String,postedAtMs:Long){
-        link.send(PhoneNotification(seq.next(),id,app,title,text,postedAtMs))
+        val sent=link.send(PhoneNotification(seq.next(),id,app,title,text,postedAtMs))
+        android.util.Log.i("RokidNavNotify","forwarded app=$app sent=$sent link=${link.state.value::class.simpleName}")
     }
     fun respondToDetour(accept:Boolean){offer.value?.let {action(GlassesAction(0,if(accept)ActionType.ACCEPT_DETOUR else ActionType.DISMISS_DETOUR,it.offerId))}}
     private fun applySettings(value:UserSettings) {

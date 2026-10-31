@@ -22,9 +22,23 @@ class HudViewModel(application:Application) : AndroidViewModel(application) {
         link=if(demo) DemoPhoneLink(viewModelScope) {
             getApplication<Application>().assets.open("demo_trip.jsonl").bufferedReader().use { DemoRecording.parse(it.lineSequence()) }
         } else CxrPhoneLink.get(getApplication<Application>())
-        viewModelScope.launch { link.incoming.collect { if(it is HelloRequest){if(width>0)hello()} else store.onMessage(it) } }
+        viewModelScope.launch { link.incoming.collect {
+            if(it is HelloRequest){if(width>0)hello()} else {store.onMessage(it);if(it is PhoneNotification)wakeDisplay()}
+        } }
         viewModelScope.launch { link.connected.collect { connected -> store.onConnection(connected);if(connected && width>0)hello() } }
         (link as? DemoPhoneLink)?.start()
+    }
+    /**
+     * A card is useless on a sleeping display and its timer already runs, so wake the display for the
+     * card's lifetime. VERIFY on hardware: whether Rokid's system allows an app wake lock to do this.
+     */
+    @Suppress("DEPRECATION")
+    private fun wakeDisplay() {
+        val power=getApplication<Application>().getSystemService(android.os.PowerManager::class.java) ?: return
+        runCatching {
+            power.newWakeLock(android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP,"rokidnav:notification")
+                .acquire(HudStore.NOTIFICATION_SHOW_MS+1_000)
+        }.onFailure {android.util.Log.w("RokidNavHud","wake failed: ${it.javaClass.simpleName}")}
     }
     private fun hello(){link.send(GlassesHello(seq.next(),BuildConfig.VERSION_NAME,width,height))}
     /** Back in the foreground (e.g. reopened from the Rokid home screen): say hello so the phone resumes. */

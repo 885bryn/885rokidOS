@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Wakes the display when a phone notification card arrives. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <application
         android:icon="@drawable/ic_nav"
         android:label="Rokid Nav HUD"

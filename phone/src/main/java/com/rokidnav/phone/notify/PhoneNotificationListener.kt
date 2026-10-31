@@ -3,6 +3,7 @@ package com.rokidnav.phone.notify
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import com.rokidnav.phone.RokidNavApp
 
 /**
@@ -24,7 +25,11 @@ class PhoneNotificationListener : NotificationListenerService() {
             title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
             text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty(),
         )
-        if (!NotificationFilter.shouldForward(notice)) return
+        // No notification text in logs: only the package and the decision.
+        if (!NotificationFilter.shouldForward(notice)) {
+            Log.i(TAG, "dropped by filter pkg=${notice.packageName} category=${notice.category} ongoing=${notice.ongoing} summary=${notice.groupSummary}")
+            return
+        }
         val body = notice.title + "\n" + notice.text
         if (lastSent.put(sbn.key, body) == body) return
         RokidNavApp.instance.coordinator.forwardNotification(
@@ -46,6 +51,7 @@ class PhoneNotificationListener : NotificationListenerService() {
     }.getOrDefault(pkg)
 
     private companion object {
+        const val TAG = "RokidNavNotify"
         const val MAX_TITLE = 40
         const val MAX_TEXT = 120
     }
