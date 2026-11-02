@@ -29,16 +29,22 @@ The glasses deliver no two-finger tap. So the whole app uses four verbs: **move,
 
 ### Getting to Home
 
-The idle screen already uses tap, swipes and double tap (music). Three options:
+"Home" is a small menu of everything the OS does (notifications history, navigation, settings, later features).
+The problem: on the idle screen with music, every gesture is already used (tap = pause, swipe = skip, double
+tap = leave the app). So one gesture must open Home. Two options (option C, swipe, is dropped: it makes skipping slow):
 
-| | How Home opens | Music controls | Exit to Rokid menu |
-|---|---|---|---|
-| **A (recommended)** | **Double tap** on the idle screen when music plays; **tap** when nothing plays | unchanged: tap = play/pause, swipe = skip | Home row "Exit to Rokid menu"; double tap on idle with no music |
-| B | Tap always opens Home | moves into a Music screen (one more tap) | double tap on Home |
-| C | Swipe forward opens Home | skip becomes tap-then-swipe | double tap on idle |
+| To do this | Option A (recommended) | Option B |
+|---|---|---|
+| Pause or play | **tap** | tap (open Home), tap (open Now playing), tap |
+| Skip a song | **swipe** | tap, tap, then swipe |
+| Open Home | **double tap** | **tap** |
+| Leave to the Rokid menu | Home, last row "Exit", tap | double tap on Home |
+| Nothing is playing | tap opens Home, double tap leaves | same as with music |
 
-A keeps today's music behavior. The cost: with music playing, double tap no longer leaves the app by itself;
-Home has an Exit row for that.
+- **A** keeps music exactly as it is now. The price: while music plays, double tap opens Home instead of
+  leaving the app, so leaving takes one more step (the Exit row).
+- **B** makes Home the first screen for everything. Music moves one level down, so pause and skip cost more taps,
+  but double tap always leaves the app, as the user described.
 
 ### Home rows (first version)
 
@@ -52,36 +58,53 @@ The card shows the seconds left in its top-right corner (bold, 26 px) and redraw
 6 s for a short message, longer for long text, 15 s at most. A tap used to hide the card; with actions (below)
 a tap opens them instead and the countdown stops.
 
-## 4. Responding to a notification (proposal)
+## 4. Voice replies to messages (proposal)
 
-While a card shows:
+Goal: answer an Instagram, WhatsApp, Messages or Telegram message by speaking, from the glasses.
 
-- **Tap** opens its **actions**: the card becomes a focus list and the countdown is replaced by "hold".
-  Swipe moves, tap fires, double tap closes the card.
-- **Rows** (up to 4 visible, in this order):
-  1. **Quick replies**, only when the notification has a reply action (WhatsApp, Messages, Telegram,
-     Signal and others do). Three phrases, edited on the phone; defaults "OK", "On my way", "Can't talk now".
-  2. The app's **own action buttons** without text input (for example "Mark as read", "Archive", "Like").
-  3. **Dismiss** (clears the notification on the phone).
-- After a row fires: "Sent" or "Done" for 1.5 s, then the card closes.
-- **How it works on the phone:** the notification listener keeps the notification's actions for 2 minutes. A
-  reply fills the app's own `RemoteInput` with the chosen text and sends the app's `PendingIntent`, which is
-  what the notification shade does. Dismiss calls `cancelNotification`. No account access is needed.
-- **Protocol (additive):** `PhoneNotification` gets `actions: List<NotifAction(id, label, kind)>` (default
-  empty); the glasses answer with `GlassesAction(NOTIFICATION_ACTION, targetId = "<notification id>|<action id>")`.
-  Old HUDs ignore both.
-- **While navigating:** cards stay glance-only (no actions), because tap and swipe already steer the trip
-  HUD. This is the safe default; the user can change it.
+### What the user does
 
-### Later: dictated replies
+1. A card appears with a countdown. **Tap** it. The countdown stops.
+2. The card shows rows: **Speak a reply** (focused), the app's own buttons (for example "Like"), **Dismiss**.
+3. **Tap "Speak a reply".** The glasses show "Listening…" with a level bar and a 10 s limit. Speak.
+   Tap again to stop early; silence for 1.5 s also stops it.
+4. The glasses show the text in large type, with rows **Send** (focused), **Redo**, **Cancel**.
+   **Tap Send.** The text goes to the chat. The card shows "Sent" for 1.5 s and closes.
+5. **Double tap** at any step goes back one step. After Cancel nothing is sent.
 
-The phone's microphone and speech recognizer can take a spoken reply: row "Dictate" shows "Listening…",
-the phone transcribes, the glasses show the text with Send / Cancel rows. This needs the phone nearby and
-is not part of the first version. Using the glasses' microphone is unconfirmed (VERIFY).
+Sending needs one deliberate tap, so a mis-heard phrase is never sent by itself.
+
+### How it works
+
+- **Sending:** the phone's notification listener holds the notification's own reply action for 2 minutes
+  (until the notification is removed). It fills the app's `RemoteInput` with the text and fires the app's
+  `PendingIntent`, which is what the "Reply" button in the notification shade does. No account access is
+  needed. WhatsApp, Messages, Telegram and Signal offer this; Instagram shows a "Reply" button in the
+  notification (VERIFY on this phone that it sends inline and does not open the app).
+- **Microphone:** the SDK streams the glasses' microphone to the phone (`startAudioStream`,
+  `onAudioReceived(byte[])`). It needs the MICROPHONE permission added to the Rokid authorization (one more
+  approval in Hi Rokid). The audio format is not documented (VERIFY with a spike: log chunk size and rate).
+  If the glasses' mic cannot be used, the fallback is the phone's microphone (the phone must be close).
+- **Speech to text, in order of preference:**
+  1. **On the phone, offline:** Android's on-device recognizer, fed with the glasses' audio. Private and free.
+     Needs Android 13+ (this phone has it); VERIFY that the recognizer accepts a supplied audio stream.
+  2. **Cloud:** Google Cloud Speech-to-Text. Better accuracy for names and noise, but it sends the audio
+     to Google and needs an API key and billing. Only if option 1 is not good enough.
+- **Protocol (additive):** `PhoneNotification` gets `canReply: Boolean` and `actions: List<NotifAction>`
+  (default empty). New messages: `GlassesAction(NOTIFICATION_ACTION, targetId)`, a phone-to-glasses
+  `VoiceState(listening | text | sent | failed, text, level)`. Old HUDs ignore them.
+- **During a trip:** cards stay glance-only (tap and swipe already steer the trip HUD).
+
+### First spike (before the full feature)
+
+1. Add the MICROPHONE permission, call `startAudioStream`, log what arrives.
+2. Run the on-device recognizer on that audio and compare with what was said.
+3. Fire a reply on a real Instagram and WhatsApp notification.
+Each step is small and shows whether the plan works on this hardware.
 
 ## 5. Decisions
 
-1. Home entry: option **A**, B or C?
-2. Quick replies: keep the three defaults and edit them on the phone, or other phrases?
-3. Allow actions on cards during a trip? (Recommended: no.)
-4. Build order: notification actions first (smaller), then Home and the focus framework?
+1. Home: option **A** or B?
+2. Voice replies: send only after a "Send" tap (recommended), or send automatically after a 3 s countdown?
+3. Speech to text: try the offline on-device recognizer first (recommended)?
+4. Build order: the voice-reply spike first, then Home and the focus framework?
