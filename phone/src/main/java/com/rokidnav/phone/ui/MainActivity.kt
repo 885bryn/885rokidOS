@@ -44,7 +44,17 @@ class MainActivity:ComponentActivity() {
         if(androidx.core.content.ContextCompat.checkSelfPermission(this,android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED)startVoiceTest()
         else recordAudio.launch(android.Manifest.permission.RECORD_AUDIO)
     }
-    private fun startVoiceTest()=lifecycleScope.launch {com.rokidnav.phone.voice.VoiceSpike(applicationContext,app.glassesLink).run(6) {events.add(0,it)}}
+    /** The status line sits right under the button; the old list at the bottom of the page was out of view. */
+    private val voiceStatus=mutableStateOf("")
+    private val voiceBusy=mutableStateOf(false)
+    private fun startVoiceTest(){
+        if(voiceBusy.value)return // a second start while one runs makes the glasses refuse the stream
+        voiceBusy.value=true
+        lifecycleScope.launch {
+            try {com.rokidnav.phone.voice.VoiceSpike(applicationContext,app.glassesLink).run(6) {voiceStatus.value=it;events.add(0,it)}}
+            finally {voiceBusy.value=false}
+        }
+    }
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {app.glassesLink.incoming.collect {message->
@@ -68,7 +78,7 @@ class MainActivity:ComponentActivity() {
                     2->SettingsScreen(app)
                     else->SetupScreen(app.glassesLink,events,
                     authorize={app.glassesLink.authorize(this@MainActivity)},connect=app.glassesLink::connect,installWithRokid={installWithHiRokidOpen()},
-                    openRokid={openRokid()},test={sendHudTest()},voiceTest={voiceTest()},export={exportHud.launch("RokidNav-HUD.apk")},preview={startActivity(Intent().setClassName(BuildConfig.GLASSES_PACKAGE,BuildConfig.GLASSES_ACTIVITY).putExtra("demo",true).putExtra("phonePreview",true))})
+                    openRokid={openRokid()},test={sendHudTest()},voiceTest={voiceTest()},voiceStatus=voiceStatus.value,voiceBusy=voiceBusy.value,export={exportHud.launch("RokidNav-HUD.apk")},preview={startActivity(Intent().setClassName(BuildConfig.GLASSES_PACKAGE,BuildConfig.GLASSES_ACTIVITY).putExtra("demo",true).putExtra("phonePreview",true))})
                     }
                     }
                 }
@@ -122,7 +132,7 @@ class MainActivity:ComponentActivity() {
 }
 
 @Composable
-private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,connect:()->Unit,installWithRokid:()->Unit,openRokid:()->Unit,test:()->Unit,voiceTest:()->Unit,export:()->Unit,preview:()->Unit) {
+private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,connect:()->Unit,installWithRokid:()->Unit,openRokid:()->Unit,test:()->Unit,voiceTest:()->Unit,voiceStatus:String,voiceBusy:Boolean,export:()->Unit,preview:()->Unit) {
     val state by link.state.collectAsState()
     var environment by remember {mutableStateOf<EnvironmentStatus?>(null)}
     var checkError by remember {mutableStateOf(false)}
@@ -146,7 +156,7 @@ private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,
             Button(onClick=authorize,enabled=!busy && environment is EnvironmentStatus.Ok){Text(if(state==LinkState.Authorizing)"Approve on the Rokid screen" else "Authorize glasses")}
         }
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
-        if(state==LinkState.Ready){OutlinedButton(onClick=test){Text("Send HUD test")};if(BuildConfig.DEBUG)OutlinedButton(onClick=voiceTest){Text("Voice test (speak for 6 s)")};TextButton(onClick=link::disconnect){Text("Disconnect")}}
+        if(state==LinkState.Ready){OutlinedButton(onClick=test){Text("Send HUD test")};if(BuildConfig.DEBUG){OutlinedButton(onClick=voiceTest,enabled=!voiceBusy){Text(if(voiceBusy)"Listening… speak now" else "Voice test (speak for 6 s)")};if(voiceStatus.isNotEmpty())Text(voiceStatus,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodyLarge)};TextButton(onClick=link::disconnect){Text("Disconnect")}}
         if(BuildConfig.DEBUG){
             HorizontalDivider(color=Color(0xFF25382D))
             Text("HUD preview",style=MaterialTheme.typography.titleMedium)

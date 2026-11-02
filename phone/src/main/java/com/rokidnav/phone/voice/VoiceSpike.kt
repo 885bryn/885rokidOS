@@ -53,9 +53,27 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
         Log.i(TAG, "audio chunks=$chunks bytes=$bytes perSecond=$perSecond firstChunkHead=$hex")
         say("Audio: $chunks chunks, $bytes bytes ($perSecond B/s). 32000 B/s = 16 kHz 16-bit mono.")
         if (bytes == 0L) return
+        val (peak, rms) = loudness(file)
+        Log.i(TAG, "loudness peak=$peak rms=$rms")
+        say(if (peak < 50) "The glasses microphone sent silence (peak $peak). Did it hear you?" else "Loudness: peak $peak, rms $rms.")
+        if (peak < 50) return
         val text = recognize(file)
         Log.i(TAG, "recognized=${text ?: "(nothing)"}")
         say(if (text.isNullOrBlank()) "The recognizer heard nothing it could use." else "Heard: $text")
+    }
+
+    /** Peak and RMS of 16-bit little-endian PCM, 0 = digital silence, 32767 = full scale. */
+    private fun loudness(file: File): Pair<Int, Int> {
+        val data = file.readBytes()
+        var peak = 0; var sum = 0.0; var n = 0
+        var i = 0
+        while (i + 1 < data.size) {
+            val v = ((data[i + 1].toInt() shl 8) or (data[i].toInt() and 0xff)).toShort().toInt()
+            val a = kotlin.math.abs(v)
+            if (a > peak) peak = a
+            sum += v.toDouble() * v; n++; i += 2
+        }
+        return peak to (if (n == 0) 0 else kotlin.math.sqrt(sum / n).toInt())
     }
 
     /** Assumes 16 kHz 16-bit mono PCM until the stream's real format is known. */
