@@ -89,6 +89,8 @@ class HudRenderer(context: Context) {
     private var mediaArtist = ""
     private val playTriangle = Path().apply { moveTo(0f,0f); lineTo(0f,24f); lineTo(21f,12f); close() }
     private var notificationLeft = ""
+    private var voiceHeader = ""
+    private var voiceLines = emptyArray<String>()
     private var notificationLines = emptyArray<String>()
     private var cardLayout = -1
     private var cardLeft = 0f
@@ -264,6 +266,13 @@ class HudRenderer(context: Context) {
             }
             val elapsed=(next.nowMs-next.notificationShownAt).coerceAtLeast(0)
             notificationLeft=((HudStore.notificationMillis(n)-elapsed+999)/1000).coerceAtLeast(0).toString()
+            next.voice?.let { v ->
+                if(v!==old.voice || n!==old.notification) {
+                    voiceHeader=ellipsize("REPLY TO "+n.title.uppercase(),17f,cardW-130f)
+                    val shown=when(v.phase) { VoicePhase.SENT->"Sent"; VoicePhase.LISTENING->v.text.ifBlank{"Speak now…"}; else->v.text }
+                    voiceLines=wrap(shown,VOICE_SIZE,cardW-32f,4)
+                }
+            }
         }
         next.media?.let { m ->
             mediaApp=m.app.uppercase()
@@ -337,7 +346,7 @@ class HudRenderer(context: Context) {
         return value.take(count)+"…"
     }
 
-    fun draw(c:Canvas,nanos:Long){drawExpanded(c,nanos);notificationCard(c)}
+    fun draw(c:Canvas,nanos:Long){drawExpanded(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c)}
     private fun drawExpanded(c:Canvas,nanos:Long) {
         if(!s.linkConnected && s.navState!=NavState.IDLE && s.navState!=NavState.ENDED) {
             text(c,"Phone disconnected",18f,340f,24f)
@@ -372,7 +381,7 @@ class HudRenderer(context: Context) {
         }
     }
     /** Corner layout: upper 62% stays transparent; map labels are available in expanded mode. */
-    fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);notificationCard(c)}
+    fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c)}
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
             if(s.notification==null) {
@@ -743,7 +752,8 @@ class HudRenderer(context: Context) {
     private fun notificationCard(c:Canvas) {
         if(s.notification==null || s.detour!=null) return
         val lines=notificationLines.size
-        val height=if(lines==0)72f else 94f+(lines-1)*cardStep+16f
+        val reply=s.replyAvailable
+        val height=(if(lines==0)72f else 94f+(lines-1)*cardStep+16f)+(if(reply)30f else 0f)
         box(c,cardLeft,cardTop,cardLeft+cardW,cardTop+height,12f,fill=true,black=true)
         box(c,cardLeft,cardTop,cardLeft+cardW,cardTop+height,12f)
         text(c,notificationApp,cardLeft+16f,cardTop+26f,17f,179,b=true)
@@ -751,6 +761,38 @@ class HudRenderer(context: Context) {
         right(c,notificationLeft,cardLeft+cardW-16f,cardTop+30f,26f,b=true)
         text(c,notificationTitle,cardLeft+16f,cardTop+60f,26f,b=true)
         for(i in 0 until lines)text(c,notificationLines[i],cardLeft+16f,cardTop+94f+i*cardStep,cardSize,230)
+        // The app has a reply box: say what a tap does.
+        if(reply)text(c,"TAP  reply by voice",cardLeft+16f,cardTop+height-12f,18f,191,b=true)
+    }
+    /**
+     * Voice reply: the words as they are heard, then Send / Redo / Cancel. Sits at the bottom of the view (the same width as the
+     * card) and grows upward so a long message and three rows still fit.
+     */
+    private fun voiceCard(c:Canvas) {
+        val v=s.voice ?: return
+        val review=v.phase==VoicePhase.REVIEW
+        val lines=voiceLines.size.coerceAtLeast(1)
+        val textEnd=70f+(lines-1)*VOICE_STEP+14f
+        val height=when(v.phase) { VoicePhase.REVIEW->textEnd+3*VOICE_ROW+8f; VoicePhase.LISTENING->textEnd+30f; else->textEnd+6f }
+        val limit=if((cardLayout and 2)!=0)620f else 384f
+        val top=minOf(cardTop,limit-height).coerceAtLeast(8f)
+        box(c,cardLeft,top,cardLeft+cardW,top+height,12f,fill=true,black=true)
+        box(c,cardLeft,top,cardLeft+cardW,top+height,12f)
+        text(c,voiceHeader,cardLeft+16f,top+26f,17f,179,b=true)
+        val status=when(v.phase) { VoicePhase.LISTENING->"LISTENING"; VoicePhase.REVIEW->"CHECK"; VoicePhase.SENT->"DONE"; else->"" }
+        right(c,status,cardLeft+cardW-16f,top+26f,17f,179,b=true)
+        val dim=if(v.phase==VoicePhase.LISTENING && v.text.isBlank())153 else 245
+        for(i in voiceLines.indices)text(c,voiceLines[i],cardLeft+16f,top+70f+i*VOICE_STEP,VOICE_SIZE,dim,b=v.phase==VoicePhase.SENT)
+        if(v.phase==VoicePhase.LISTENING)text(c,"TAP  done  ·  2× TAP  cancel",cardLeft+16f,top+height-12f,18f,191,b=true)
+        if(review) {
+            val labels=VOICE_ROWS
+            for(i in labels.indices) {
+                val rowTop=top+textEnd+i*VOICE_ROW
+                val focused=s.voiceFocus==i
+                if(focused)box(c,cardLeft+10f,rowTop,cardLeft+cardW-10f,rowTop+VOICE_ROW-6f,9f)
+                text(c,labels[i],cardLeft+26f,rowTop+VOICE_ROW-16f,26f,if(focused)255 else 140,b=focused)
+            }
+        }
     }
     /** Splits [value] at spaces into at most [maxLines] lines that fit [width]; the last one ends in "…" if cut. */
     private fun wrap(value:String,size:Float,width:Float,maxLines:Int):Array<String> {
@@ -793,6 +835,10 @@ class HudRenderer(context: Context) {
         private const val LABEL_MINOR = 17f
         const val ALERT_FRESH_MS = 6_000L
         private const val MEDIA_W = 444f
+        private const val VOICE_SIZE = 26f
+        private const val VOICE_STEP = 32f
+        private const val VOICE_ROW = 44f
+        private val VOICE_ROWS = arrayOf("Send","Redo","Cancel")
         private val SPACES = Regex("\\s+")
         private val NAME_ABBREVIATIONS = listOf("street" to "st","avenue" to "ave","boulevard" to "blvd","road" to "rd",
             "drive" to "dr","lane" to "ln","place" to "pl","court" to "ct","highway" to "hwy","parkway" to "pkwy",

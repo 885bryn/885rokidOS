@@ -72,6 +72,8 @@ class RokidNavApp : Application() {
             roads = com.rokidnav.phone.map.RoadContextProvider(java.io.File(cacheDir, "streets")),
             speaker = com.rokidnav.phone.alerts.AndroidAlertSpeaker(this),
             media = media,
+            transcriber = com.rokidnav.phone.voice.SherpaTranscriber(this),
+            replySender = com.rokidnav.phone.voice.ReplySender {id,text->replies.reply(id,text)},
         )
         coordinator.start()
         media.start()

@@ -21,6 +21,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     private var lastMediaKey:GlassesKey?=null
     private var lastMediaKeyAt=0L
     private var arrivedAt=0L
+    private fun resultOver(s:HudState,now:Long)=s.voice!=null && (s.voice.phase==VoicePhase.SENT || s.voice.phase==VoicePhase.FAILED) && now-s.voiceAt>=REPLY_RESULT_MS
     /** The HUD came to the front. If no card caused that, the user did (a touch woke the glasses): show the player. */
     fun onUserWake(){mutable.update {if(it.notification==null)it.copy(mediaShown=true,mediaShownAt=clock()) else it}}
     /** A new phone session began (HelloRequest): the phone may have restarted and count from a lower number. */
@@ -74,7 +75,12 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             is MediaState->mutable.update {s->val next=m.takeIf {it.active}
                 if(sameOnScreen(s.media,next))s else s.copy(media=next)}
             // A notification and the player never share the screen, and the player does not come back after the card.
-            is PhoneNotification->mutable.update {it.copy(notification=m,notificationShownAt=clock(),nowMs=clock(),mediaShown=false)}
+            // A card never replaces a reply that is being spoken.
+            is PhoneNotification->mutable.update {if(it.voice!=null)it else it.copy(notification=m,notificationShownAt=clock(),nowMs=clock(),mediaShown=false)}
+            is VoiceState->mutable.update {s->
+                if(m.phase==VoicePhase.IDLE)s.copy(voice=null,voiceFocus=0)
+                else s.copy(voice=m,voiceAt=clock(),nowMs=clock(),voiceFocus=if(s.voice?.phase==m.phase)s.voiceFocus else 0)
+            }
             else->Unit
         }
     }
@@ -104,6 +110,13 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 mutable.update {it.copy(detour=null)}
             }
             // A detour offer hides the card, so its taps above win; otherwise a tap only hides the card.
+            s.voice!=null->voiceKey(s,s.voice,key)
+            // A card whose app has a reply box: tap starts a voice reply (shown at once; the phone confirms).
+            s.replyAvailable && key==GlassesKey.TAP->{
+                val id=s.notification!!.id
+                sendAction(GlassesAction(0,ActionType.VOICE_START,id))
+                mutable.update {it.copy(voice=VoiceState(0,VoicePhase.LISTENING,id),voiceAt=clock())}
+            }
             s.notification!=null && key==GlassesKey.TAP->mutable.update {it.copy(notification=null)}
             // No trip and music playing: the idle screen is the player.
             // The first touch only brings the player up (it must be seen before it is controlled); the same gesture
@@ -142,6 +155,35 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             else->sendAction(GlassesAction(0,ActionType.MEDIA_PREVIOUS))
         }
     }
+    /** Keys during a voice reply. Everything is consumed so a swipe never skips a song or the double tap never exits. */
+    private fun voiceKey(s:HudState,v:VoiceState,key:GlassesKey) {
+        val id=v.notificationId
+        fun cancel(){sendAction(GlassesAction(0,ActionType.VOICE_CANCEL,id));mutable.update {it.copy(voice=null,voiceFocus=0,notification=null)}}
+        fun close(){mutable.update {it.copy(voice=null,voiceFocus=0,notification=null)}}
+        // One physical gesture can arrive by several input paths (see mediaKey).
+        val now=clock()
+        if(key==lastMediaKey && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS)return
+        lastMediaKey=key;lastMediaKeyAt=now
+        when(v.phase) {
+            VoicePhase.LISTENING->when(key) {
+                GlassesKey.TAP->sendAction(GlassesAction(0,ActionType.VOICE_STOP,id))
+                GlassesKey.DOUBLE_TAP,GlassesKey.BACK->cancel()
+                else->Unit
+            }
+            VoicePhase.REVIEW->when(key) {
+                GlassesKey.SWIPE_FORWARD->mutable.update {it.copy(voiceFocus=(it.voiceFocus+1)%3)}
+                GlassesKey.SWIPE_BACK->mutable.update {it.copy(voiceFocus=(it.voiceFocus+2)%3)}
+                GlassesKey.TAP->when(s.voiceFocus) {
+                    0->sendAction(GlassesAction(0,ActionType.VOICE_SEND,id))
+                    1->{sendAction(GlassesAction(0,ActionType.VOICE_REDO,id));mutable.update {it.copy(voice=VoiceState(0,VoicePhase.LISTENING,id),voiceFocus=0)}}
+                    else->cancel()
+                }
+                GlassesKey.DOUBLE_TAP,GlassesKey.BACK->cancel()
+            }
+            VoicePhase.SENT,VoicePhase.FAILED->if(key==GlassesKey.TAP || key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK)close()
+            VoicePhase.IDLE->Unit
+        }
+    }
     private fun idleMedia(s:HudState)=s.media!=null && s.notification==null && (s.navState==NavState.IDLE || s.navState==NavState.ENDED)
     private fun mode(value:HudMode){mutable.update {it.copy(mode=value)}}
     fun tick(now:Long=clock()) {
@@ -154,7 +196,9 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             phoneSilent=silent && s.navState in listOf(NavState.ACTIVE,NavState.REROUTING,NavState.GPS_LOST),
             alerts=if(stale.isEmpty())s.alerts else s.alerts.filterNot {it.id in stale},
             alertSeenAt=if(stale.isEmpty())s.alertSeenAt else s.alertSeenAt-stale,
-            notification=s.notification?.takeIf {now-s.notificationShownAt<notificationMillis(it)},
+            // A card with a reply under way stays; a finished reply (sent or failed) leaves after REPLY_RESULT_MS.
+            notification=s.notification?.takeIf {(s.voice!=null && !resultOver(s,now)) || (s.voice==null && now-s.notificationShownAt<notificationMillis(it))},
+            voice=s.voice?.takeIf {!resultOver(s,now)},
             mediaShown=s.mediaShown && now-s.mediaShownAt<MEDIA_SHOW_MS,
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
@@ -167,6 +211,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         const val ALERT_STALE_MS=120_000L
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L
+        /** How long "Sent" or the failure reason stays before the card closes. */
+        const val REPLY_RESULT_MS=2_000L
         /** How long the player stays after the last touch. */
         const val MEDIA_SHOW_MS=10_000L
         /** Longer than the spread between the three input paths of one gesture, shorter than two real ones. */

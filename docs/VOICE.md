@@ -37,3 +37,18 @@ recording "hello this is the test" came back exactly.
 - Glasses tab → "Voice test (speak for 6 s)" (debug builds): records, shows loudness and the text.
 - `adb shell am broadcast -n com.rokidnav.phone/com.rokidnav.phone.debug.VoiceReplayReceiver` transcribes the saved
   recording again (`files/voice-spike.pcm` in the app's private folder). Debug builds only.
+
+## The reply flow (built 2026-11-01)
+
+1. A card from an app with a reply box (`PhoneNotification.canReply`, from `NotificationReplier.remember`) shows
+   "TAP reply by voice". During a trip cards stay glances. WeChat has no reply box (log: `reply available=false`).
+2. **Tap** starts it (`VOICE_START`). The phone opens the glasses microphone and `VoiceReplyController` feeds the audio to
+   `SherpaSpeech`; the words so far go to the glasses (`VoiceState LISTENING`). It stops when you pause for 1.4 s,
+   when you tap (`VOICE_STOP`), or after 15 s.
+3. **Check screen** (`REVIEW`): the text as typed (`Dictation.format`) and three rows. **Swipe** moves, **tap** acts:
+   Send (`VOICE_SEND`: `NotificationReplier.reply` fills the app's reply box and fires it), Redo (listen again), Cancel.
+   **Double tap** cancels at any step and is consumed by the HUD, so it does not leave to the Rokid menu.
+4. `SENT` or `FAILED` shows for 2 s, then the card closes. Nothing is sent without the Send tap.
+5. Replies work while the notification is still posted, for up to 2 minutes (`ReplyCache`).
+
+Message text is never logged by the real flow.

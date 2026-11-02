@@ -11,6 +11,7 @@ import com.rokidnav.protocol.PositionUpdate
 import com.rokidnav.protocol.TrafficSegment
 import com.rokidnav.protocol.TripProgress
 import com.rokidnav.protocol.Units
+import com.rokidnav.protocol.VoiceState
 
 /** Immutable snapshot the HudView draws. Everything the screen shows must come from here. */
 data class HudState(
@@ -40,6 +41,11 @@ data class HudState(
     /** Latest phone notification, shown as a card for [HudStore.notificationMillis]; tap hides it. */
     val notification: PhoneNotification? = null,
     val notificationShownAt: Long = 0,
+    /** A voice reply in progress for [notification]; while it is set the card does not expire. */
+    val voice: VoiceState? = null,
+    val voiceAt: Long = 0,
+    /** Focused row of the review screen: 0 Send, 1 Redo, 2 Cancel. */
+    val voiceFocus: Int = 0,
 
     /** What the phone plays, or null. Only track, artist and play state matter: nothing here moves with time. */
     val media: MediaState? = null,
@@ -57,6 +63,9 @@ data class HudState(
 )
 
 val HudState.mediaVisible: Boolean get() = media != null && mediaShown
+
+/** A tap on the card starts a voice reply: the app offers a reply box and no trip is running (trip cards stay glances). */
+val HudState.replyAvailable: Boolean get() = notification?.canReply == true && (navState == NavState.IDLE || navState == NavState.ENDED)
 
 data class HudRoad(val points: List<LatLng>, val name: String, val major: Boolean)
 

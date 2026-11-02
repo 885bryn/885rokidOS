@@ -31,7 +31,7 @@ class PhoneNotificationListener : NotificationListenerService() {
             Log.i(TAG, "dropped by filter pkg=${notice.packageName} category=${notice.category} ongoing=${notice.ongoing} summary=${notice.groupSummary}")
             return
         }
-        RokidNavApp.instance.replies.remember(sbn)
+        val canReply = RokidNavApp.instance.replies.remember(sbn)
         val body = notice.title + "\n" + notice.text
         if (lastSent.put(sbn.key, body) == body) return
         val sent = RokidNavApp.instance.coordinator.forwardNotification(
@@ -41,6 +41,7 @@ class PhoneNotificationListener : NotificationListenerService() {
             title = notice.title.take(MAX_TITLE),
             text = notice.text.take(MAX_TEXT),
             postedAtMs = sbn.postTime,
+            canReply = canReply,
         )
         Log.i(TAG, "forwarded app=${appLabel(sbn.packageName)} sent=$sent link=${RokidNavApp.instance.coordinator.linkStateName}")
     }

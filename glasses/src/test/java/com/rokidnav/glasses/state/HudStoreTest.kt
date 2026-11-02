@@ -266,4 +266,84 @@ class HudStoreTest {
         now+=2_000;hud.tick()
         assertEquals(false,hud.state.value.mediaVisible)
     }
+
+    private var cardSeq=100L
+    private fun replyCard(id:String="n1",canReply:Boolean=true)=com.rokidnav.protocol.PhoneNotification(cardSeq++,id,"WhatsApp","Sam","Where are you?",canReply=canReply)
+
+    @Test fun tapOnAReplyableCardStartsAVoiceReplyAndOtherCardsJustClose() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(replyCard("n1",canReply=false))
+        hud.onKey(GlassesKey.TAP)
+        assertNull(hud.state.value.notification)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+
+        now+=1_000
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(cardSeq++,"n2","WhatsApp","Sam","Hi",canReply=true))
+        hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+        assertEquals("n2",sent.single().targetId)
+        assertEquals(com.rokidnav.protocol.VoicePhase.LISTENING,hud.state.value.voice?.phase)
+        // A trip makes cards glances: no reply, the tap only closes it.
+        val trip=HudStore({now}) {sent+=it}
+        trip.onMessage(com.rokidnav.protocol.NavStateUpdate(1,com.rokidnav.protocol.NavState.ACTIVE))
+        trip.onMessage(replyCard("n3"))
+        sent.clear();trip.onKey(GlassesKey.TAP)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+    }
+
+    @Test fun reviewScreenSwipesBetweenSendRedoCancelAndTapActsOnTheFocusedRow() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(replyCard());hud.onKey(GlassesKey.TAP);sent.clear()
+        hud.onMessage(com.rokidnav.protocol.VoiceState(cardSeq++,com.rokidnav.protocol.VoicePhase.REVIEW,"n1","I am on my way."))
+        assertEquals(0,hud.state.value.voiceFocus)
+        // Send is first: tap sends.
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.VOICE_SEND),sent.map {it.action})
+        // Move to Redo (a swipe reported twice counts once), tap: listen again.
+        now+=1_000;hud.onKey(GlassesKey.SWIPE_FORWARD);hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(1,hud.state.value.voiceFocus)
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(ActionType.VOICE_REDO,sent.last().action)
+        assertEquals(com.rokidnav.protocol.VoicePhase.LISTENING,hud.state.value.voice?.phase)
+        // Back in review, swipe back wraps to Cancel; tap cancels and closes the card.
+        hud.onMessage(com.rokidnav.protocol.VoiceState(cardSeq++,com.rokidnav.protocol.VoicePhase.REVIEW,"n1","Again."))
+        now+=1_000;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(2,hud.state.value.voiceFocus)
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(ActionType.VOICE_CANCEL,sent.last().action)
+        assertNull(hud.state.value.voice)
+        assertNull(hud.state.value.notification)
+    }
+
+    @Test fun listeningTapStopsDoubleTapCancelsAndDoubleTapIsNotLeftToTheSystem() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(replyCard());hud.onKey(GlassesKey.TAP);sent.clear()
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.VOICE_STOP),sent.map {it.action})
+        now+=1_000
+        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))
+        assertEquals(ActionType.VOICE_CANCEL,sent.last().action)
+        assertNull(hud.state.value.voice)
+    }
+
+    @Test fun theCardStaysWhileAReplyIsUnderWayAndClosesAfterTheResult() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(replyCard());hud.onKey(GlassesKey.TAP)
+        now+=HudStore.NOTIFICATION_MAX_MS*3;hud.tick()
+        assertEquals("n1",hud.state.value.notification?.id)
+        hud.onMessage(com.rokidnav.protocol.VoiceState(cardSeq++,com.rokidnav.protocol.VoicePhase.SENT,"n1"))
+        now+=HudStore.REPLY_RESULT_MS-100;hud.tick()
+        assertEquals("n1",hud.state.value.notification?.id)
+        now+=200;hud.tick()
+        assertNull(hud.state.value.voice)
+        assertNull(hud.state.value.notification)
+        // A card that arrives mid-reply does not displace it.
+        hud.onMessage(replyCard("n2"));hud.onKey(GlassesKey.TAP)
+        hud.onMessage(replyCard("n3"))
+        assertEquals("n2",hud.state.value.notification?.id)
+    }
 }

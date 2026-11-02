@@ -35,6 +35,9 @@ class ProtocolCodecTest {
             MediaState(23, true, "Spotify", "Song", "Artist", true, 61_000, 215_000),
             MediaState(24, active = false),
             GlassesAction(25, ActionType.MEDIA_PLAY_PAUSE),
+            PhoneNotification(26, "n2", "WhatsApp", "Sam", "Hi", 1700000000000, canReply = true),
+            VoiceState(27, VoicePhase.REVIEW, "n2", "I will be there soon."),
+            GlassesAction(28, ActionType.VOICE_SEND, "n2"),
         )
         for (m in messages) {
             val (magic, body) = ProtocolCodec.encode(m)
@@ -59,6 +62,10 @@ class ProtocolCodecTest {
     @Test fun oldAlertsHaveUnknownReportTime() {
         val old="""{"t":"alert","seq":1,"id":"p1","kind":"POLICE","distanceAheadMeters":100,"lat":0,"lng":0}"""
         assertEquals(0L,(ProtocolCodec.decode(ProtocolVersion.MAGIC,old) as Alert).reportedAtMs)
+    }
+    @Test fun oldNotificationsCannotReply() {
+        val old="""{"t":"notification","seq":1,"id":"n1","title":"Sam"}"""
+        assertEquals(false,(ProtocolCodec.decode(ProtocolVersion.MAGIC,old) as PhoneNotification).canReply)
     }
     @Test fun minimalNotificationDecodes() {
         val body="""{"t":"notification","seq":1,"id":"n1"}"""

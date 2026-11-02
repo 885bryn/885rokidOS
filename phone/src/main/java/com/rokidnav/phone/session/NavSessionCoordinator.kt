@@ -16,6 +16,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val settings:SettingsRepository?=null,
     private val speaker:AlertSpeaker?=null,
     private val media:com.rokidnav.phone.media.MediaSource?=null,
+    transcriber:com.rokidnav.phone.voice.Transcriber?=null,
+    replySender:com.rokidnav.phone.voice.ReplySender?=null,
     // The glasses HUD outlives the phone app and drops any message numbered at or below the last it saw, so a
     // restarted phone must count higher than before: start from the clock (a restart is always later).
     seqStart:Long=System.currentTimeMillis()) {
@@ -29,6 +31,9 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val offer=MutableStateFlow<DetourOffer?>(null)
     val detour=offer.asStateFlow()
     private var preferences=UserSettings()
+    private val voice=if(transcriber!=null && replySender!=null)com.rokidnav.phone.voice.VoiceReplyController(scope,link,transcriber,replySender) {phase,id,text->
+        link.send(VoiceState(seq.next(),phase,id,text))
+    } else null
     private var lastMedia:MediaState?=null
     private var lastMediaAt=0L
     fun sendTestSnapshot(build:(()->Long)->List<NavMessage>) {
@@ -172,8 +177,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         link.send(DetourResolved(seq.next(),message.offerId,accepted))
     }
     /** Not cached for resync: a notification only matters when it arrives. Dropped unless the link is Ready. */
-    fun forwardNotification(id:String,app:String,title:String,text:String,postedAtMs:Long):Boolean=
-        link.send(PhoneNotification(seq.next(),id,app,title,text,postedAtMs))
+    fun forwardNotification(id:String,app:String,title:String,text:String,postedAtMs:Long,canReply:Boolean=false):Boolean=
+        link.send(PhoneNotification(seq.next(),id,app,title,text,postedAtMs,canReply))
     /** For the log only. */
     val linkStateName:String get()=link.state.value::class.simpleName.orEmpty()
     fun respondToDetour(accept:Boolean){offer.value?.let {action(GlassesAction(0,if(accept)ActionType.ACCEPT_DETOUR else ActionType.DISMISS_DETOUR,it.offerId))}}
@@ -204,6 +209,10 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
             // The glasses keep their own Rokid brightness; older HUDs may still send this.
             ActionType.CYCLE_BRIGHTNESS->Unit
             ActionType.SHOW_ALTERNATIVES->traffic.forceRefresh()
+            ActionType.VOICE_START,ActionType.VOICE_REDO->voice?.start(a.targetId) ?: link.send(VoiceState(seq.next(),VoicePhase.FAILED,a.targetId,"Voice replies are not set up"))
+            ActionType.VOICE_STOP->voice?.stop()
+            ActionType.VOICE_SEND->voice?.send(a.targetId)
+            ActionType.VOICE_CANCEL->voice?.cancel(a.targetId)
             ActionType.MEDIA_PLAY_PAUSE->media?.playPause()
             ActionType.MEDIA_NEXT->media?.next()
             ActionType.MEDIA_PREVIOUS->media?.previous()

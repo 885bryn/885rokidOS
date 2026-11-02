@@ -44,22 +44,22 @@ class SherpaSpeech(modelDir: File) : AutoCloseable {
     )
 
     /** One spoken reply: feed audio, read the words so far, stop when [endpoint] says the speaker finished. */
-    inner class Utterance : AutoCloseable {
+    inner class Utterance : Transcription {
         private val stream: OnlineStream = recognizer.createStream()
         private var closed = false
 
         /** [pcm16] is little-endian 16-bit mono at 16 kHz. Returns the words so far. */
-        fun accept(pcm16: ByteArray): String {
+        override fun accept(pcm16: ByteArray): String {
             stream.acceptWaveform(toFloats(pcm16), SAMPLE_RATE)
             decodeReady()
             return recognizer.getResult(stream).text
         }
 
         /** True once the speaker has paused long enough after speaking (or the time limit passed). */
-        fun endpoint(): Boolean = recognizer.isEndpoint(stream)
+        override fun endpoint(): Boolean = recognizer.isEndpoint(stream)
 
         /** Pads with silence so the last words come out, and returns the final text. */
-        fun finish(): String {
+        override fun finish(): String {
             stream.acceptWaveform(FloatArray(SAMPLE_RATE * 8 / 10), SAMPLE_RATE)
             stream.inputFinished()
             decodeReady()

@@ -182,6 +182,8 @@ data class PhoneNotification(
     val title: String = "",
     val text: String = "",
     val postedAtMs: Long = 0,
+    /** The app offers a free-text reply on this notification: a tap on the card can start a voice reply. */
+    val canReply: Boolean = false,
 ) : NavMessage
 
 /**
@@ -202,6 +204,18 @@ data class MediaState(
     val positionMs: Long = 0,
     /** 0 when unknown (streams). */
     val durationMs: Long = 0,
+) : NavMessage
+
+/**
+ * Progress of a voice reply to notification [notificationId], phone to glasses. [text] is the words so far
+ * (LISTENING), the final words (REVIEW) or the reason (FAILED). [VoicePhase.IDLE] clears the screen.
+ */
+@Serializable @SerialName("voice")
+data class VoiceState(
+    override val seq: Long,
+    val phase: VoicePhase,
+    val notificationId: String = "",
+    val text: String = "",
 ) : NavMessage
 
 // ---------------------------------------------------------------- glasses -> phone
@@ -240,12 +254,16 @@ data class ResyncRequest(override val seq: Long, val reason: String = "") : NavM
     POLICE, SPEED_CAMERA, ACCIDENT, HAZARD, ROAD_CLOSED, CONSTRUCTION, TRAFFIC_JAM, WEATHER, OTHER
 }
 
+@Serializable enum class VoicePhase { IDLE, LISTENING, REVIEW, SENT, FAILED }
+
 @Serializable enum class NavState { IDLE, ROUTING, ACTIVE, REROUTING, GPS_LOST, ARRIVED, ENDED }
 
 @Serializable enum class ActionType {
     ACCEPT_DETOUR, DISMISS_DETOUR, END_NAVIGATION, TOGGLE_VOICE, ZOOM_IN, ZOOM_OUT,
     SHOW_ALTERNATIVES, TOGGLE_UNITS, CYCLE_BRIGHTNESS, CYCLE_ZOOM,
     MEDIA_PLAY_PAUSE, MEDIA_NEXT, MEDIA_PREVIOUS,
+    /** Voice reply to the notification in targetId: start / stop listening now / send the text / listen again / give up. */
+    VOICE_START, VOICE_STOP, VOICE_SEND, VOICE_REDO, VOICE_CANCEL,
 }
 
 /** Mirrors the Google Navigation SDK maneuver set closely enough to map 1:1 (see NavInfoMapper). */
