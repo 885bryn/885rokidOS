@@ -57,7 +57,7 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
         Log.i(TAG, "loudness peak=$peak rms=$rms")
         say(if (peak < 50) "The glasses microphone sent silence (peak $peak). Did it hear you?" else "Loudness: peak $peak, rms $rms.")
         if (peak < 50) return
-        val text = recognize(file)
+        val text = recognize(file, 16_000, 1, 25_000)
         Log.i(TAG, "recognized=${text ?: "(nothing)"}")
         say(if (text.isNullOrBlank()) "The recognizer heard nothing it could use." else "Heard: $text")
     }
@@ -76,13 +76,44 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
         return peak to (if (n == 0) 0 else kotlin.math.sqrt(sum / n).toInt())
     }
 
-    /** Assumes 16 kHz 16-bit mono PCM until the stream's real format is known. */
-    private suspend fun recognize(file: File): String? = withContext(Dispatchers.Main) {
+    /**
+     * Runs the recognizer on the saved recording with each guess of its format and logs which one produces text.
+     * Needs no new speech. Debug only (see VoiceReplayReceiver).
+     */
+    suspend fun replay(say: (String) -> Unit) {
+        val file = File(context.filesDir, "voice-spike.pcm")
+        if (!file.exists()) { say("No recording yet."); return }
+        // A pipe fed at real-time speed looks like a live microphone; a file ends at once.
+        for (pipe in booleanArrayOf(true, false)) for (rate in intArrayOf(16_000, 8_000)) {
+            val text = recognize(file, rate, 1, 12_000, pipe)
+            say("replay pipe=$pipe rate=$rate -> ${text ?: "(nothing)"}")
+            // The recognizer service needs a moment before it takes the next request ("busy" / "server disconnected").
+            delay(2_000)
+        }
+    }
+
+    /** Feeds the saved 16-bit PCM to the on-device recognizer as the given format. */
+    private suspend fun recognize(file: File, rate: Int, channels: Int, timeoutMs: Long, pipe: Boolean = false): String? = withContext(Dispatchers.Main) {
         if (Build.VERSION.SDK_INT < 33) { Log.i(TAG, "needs Android 13 for a supplied audio source"); return@withContext null }
         val onDevice = SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
         Log.i(TAG, "onDeviceRecognitionAvailable=$onDevice")
+        val source: ParcelFileDescriptor
+        if (pipe) {
+            val ends = ParcelFileDescriptor.createPipe()
+            source = ends[0]
+            val sink = ParcelFileDescriptor.AutoCloseOutputStream(ends[1])
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching {
+                    file.inputStream().use { input ->
+                        val chunk = ByteArray(640 * channels * rate / 16_000)
+                        while (true) { val n = input.read(chunk); if (n < 0) break; sink.write(chunk, 0, n); delay(20) }
+                    }
+                    sink.close()
+                }
+            }
+        } else source = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
         val recognizer = if (onDevice) SpeechRecognizer.createOnDeviceSpeechRecognizer(context) else SpeechRecognizer.createSpeechRecognizer(context)
-        val result = withTimeoutOrNull(25_000) {
+        val result = withTimeoutOrNull(timeoutMs) {
             suspendCancellableCoroutine<String?> { cont ->
                 recognizer.setRecognitionListener(object : RecognitionListener {
                     override fun onResults(results: Bundle?) { cont.resume(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()) }
@@ -97,10 +128,11 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
                 })
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY))
+                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, source)
                     .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
-                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16_000)
-                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, rate)
+                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, channels)
+                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
                 recognizer.startListening(intent)
                 cont.invokeOnCancellation { recognizer.cancel() }
             }
