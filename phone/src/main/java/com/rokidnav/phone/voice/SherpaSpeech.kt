@@ -47,10 +47,13 @@ class SherpaSpeech(modelDir: File) : AutoCloseable {
     inner class Utterance : Transcription {
         private val stream: OnlineStream = recognizer.createStream()
         private var closed = false
+        private var previous = 0f
 
         /** [pcm16] is little-endian 16-bit mono at 16 kHz. Returns the words so far. */
         override fun accept(pcm16: ByteArray): String {
-            stream.acceptWaveform(toFloats(pcm16), SAMPLE_RATE)
+            val samples = SpeechAudio.toFloats(pcm16)
+            previous = SpeechAudio.preEmphasize(samples, previous)
+            stream.acceptWaveform(samples, SAMPLE_RATE)
             decodeReady()
             return recognizer.getResult(stream).text
         }
@@ -85,15 +88,6 @@ class SherpaSpeech(modelDir: File) : AutoCloseable {
             val ready = listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt").all { File(dir, it).isFile }
             if (!ready) Log.i("RokidNavVoice", "speech model missing in $dir")
             return dir.takeIf { ready }
-        }
-
-        fun toFloats(pcm16: ByteArray): FloatArray {
-            val out = FloatArray(pcm16.size / 2)
-            for (i in out.indices) {
-                val v = ((pcm16[2 * i + 1].toInt() shl 8) or (pcm16[2 * i].toInt() and 0xff)).toShort()
-                out[i] = v / 32768f
-            }
-            return out
         }
     }
 }

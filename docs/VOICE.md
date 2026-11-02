@@ -52,3 +52,20 @@ recording "hello this is the test" came back exactly.
 5. Replies work while the notification is still posted, for up to 2 minutes (`ReplyCache`).
 
 Message text is never logged by the real flow.
+
+## Accuracy tuning (2026-11-01)
+
+The glasses microphone sends almost only low sounds (96% of the energy under 1 kHz, centroid about 380 Hz), so consonants are
+faint: "thanks" became "things", "good to know" became "curtail" or "got it know". Ten short replies were recorded from the
+glasses (Glasses tab, "Accuracy test", debug builds) and scored on the PC against what was asked for (the NVIDIA 80 ms model):
+
+| Audio fed to the model | Wrong words (of 46) |
+|---|---|
+| As recorded | 9 (19.6%) |
+| Louder (scaled to 0.3 / 0.6 / 0.9 of full scale) | 8 / 10 / 9: **volume does not matter** |
+| High-frequency shelf boost 6 / 12 / 18 dB | 8 / 8 / 10 |
+| **Pre-emphasis y[n] = x[n] - c * x[n-1]**, c = 0.5 / 0.6 / 0.65 / 0.7 / 0.75 / 0.8 / 0.85 / 0.9 / 0.97 | 7 / 7 / 2 / **1** / 3 / **1** / 2 / 4 / 5 |
+
+Built in: `SpeechAudio.preEmphasize` with c = 0.8 (middle of the good range). Clean recordings still decode the same.
+Ten phrases from one speaker is a small sample: re-run the Accuracy test after changes, and add phrases that go wrong.
+Other levers, not yet tried: a more careful model (NeMo streaming 1040 ms, 104 MB; Parakeet-TDT-CTC 110M, 104 MB), and a word list.
