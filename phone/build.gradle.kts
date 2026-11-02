@@ -21,6 +21,8 @@ android {
         targetSdk = 34       // matches CXR-L sample
         versionCode = 2
         versionName = "0.2.0"
+        // The speech library ships for the phone's 64-bit processors only (docs/VOICE.md).
+        ndk { abiFilters += "arm64-v8a" }
         manifestPlaceholders["MAPS_API_KEY"] = localProps.getProperty("MAPS_API_KEY", "")
         buildConfigField("String", "MAPS_API_KEY", "\"${localProps.getProperty("MAPS_API_KEY", "")}\"")
         buildConfigField("String", "ROUTES_API_KEY", "\"${localProps.getProperty("ROUTES_API_KEY", localProps.getProperty("MAPS_API_KEY", ""))}\"")

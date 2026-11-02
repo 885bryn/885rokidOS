@@ -12,4 +12,6 @@ captures/
 *.keystore
 /vendor/rokid-samples/
 /.tmp/
+# speech-to-text native libraries and model, fetched by hand (docs/VOICE.md)
+/phone/src/main/jniLibs/
 /tools/bootstrap/
