@@ -53,6 +53,18 @@ recording "hello this is the test" came back exactly.
 
 Message text is never logged by the real flow.
 
+## Voice command "open Grok Bot" (built 2026-11-02)
+
+1. With no trip and nothing on the screen (no card, no player), **tap**. The glasses show "VOICE COMMAND".
+2. Say "open Grok Bot". The same pipeline listens (`VoiceReplyController`, id `VOICE_COMMAND_ID`) and stops on a pause or a tap.
+3. There is no check step. `VoiceCommands.opensGrokBot` matches "open Grok Bot" (or "open Grok": speech to text may drop the last
+   word), and `GrokBot.open` starts the app on the phone. The glasses show "Opening Grok Bot on the phone" (`SENT`) or the reason
+   it did not work (`FAILED`) for 2 s.
+
+Phone setup: allow **Display over other apps** for 885rokidOS (Settings, Apps, 885rokidOS). Without it, Android 10+ does not let
+a background app open another app; the glasses then say so. The package is `GrokBot.PACKAGE` (`ai.x.grok.bot`, the "Grok Bot"
+app, not the Grok chat app `ai.x.grok`). Details and the test list: `docs/nav-review.md`.
+
 ## Accuracy tuning (2026-11-01)
 
 The glasses microphone sends almost only low sounds (96% of the energy under 1 kHz, centroid about 380 Hz), so consonants are
