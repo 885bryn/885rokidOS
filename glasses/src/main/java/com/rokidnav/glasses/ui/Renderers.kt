@@ -249,27 +249,37 @@ class HudRenderer(context: Context) {
         next.detour?.let { d -> detourSaving="Save ${Format.duration(d.savesSeconds)}"; detourVia=ellipsize("${d.via} · +${Format.distance(d.extraMeters,next.units)}",20f,284f) }
         // Card layout: with no trip it is wide and tall (nothing else to protect); on a trip the corner
         // view keeps it to the right of the turn arrow, and the big map view has the whole width.
-        next.notification?.let { n ->
+        // A voice command has a voice card but no notification under it; it takes the same place a card would.
+        if(next.notification!=null || next.voice!=null) {
             val idle=next.navState==NavState.IDLE || next.navState==NavState.ENDED
             val corner=next.mode!=HudMode.Map
             val layout=(if(idle)1 else 0)+(if(corner)2 else 0)
-            if(n!==old.notification || layout!=cardLayout) {
+            val moved=layout!=cardLayout
+            if(moved) {
                 cardLayout=layout
                 cardLeft=if(corner && idle)18f else if(corner)240f else 14f
                 cardTop=if(corner && idle)370f else if(corner)410f else if(idle)90f else 124f
                 cardW=if(corner && !idle)222f else if(corner)444f else 452f
                 cardSize=if(corner && !idle)20f else 22f
                 cardStep=cardSize+6f
-                notificationApp=ellipsize(n.app.uppercase(),17f,cardW-96f)
-                notificationTitle=ellipsize(n.title,26f,cardW-32f)
-                notificationLines=wrap(n.text,cardSize,cardW-32f,if(idle)6 else 4)
             }
-            val elapsed=(next.nowMs-next.notificationShownAt).coerceAtLeast(0)
-            notificationLeft=((HudStore.notificationMillis(n)-elapsed+999)/1000).coerceAtLeast(0).toString()
+            val n=next.notification
+            if(n!=null) {
+                if(n!==old.notification || moved) {
+                    notificationApp=ellipsize(n.app.uppercase(),17f,cardW-96f)
+                    notificationTitle=ellipsize(n.title,26f,cardW-32f)
+                    notificationLines=wrap(n.text,cardSize,cardW-32f,if(idle)6 else 4)
+                }
+                val elapsed=(next.nowMs-next.notificationShownAt).coerceAtLeast(0)
+                notificationLeft=((HudStore.notificationMillis(n)-elapsed+999)/1000).coerceAtLeast(0).toString()
+            }
             next.voice?.let { v ->
-                if(v!==old.voice || n!==old.notification) {
-                    voiceHeader=ellipsize("REPLY TO "+n.title.uppercase(),17f,cardW-130f)
-                    val shown=when(v.phase) { VoicePhase.SENT->"Sent"; VoicePhase.STARTING->"Starting…"; VoicePhase.LISTENING->v.text.ifBlank{"Speak now…"}; else->v.text }
+                if(v!==old.voice || n!==old.notification || moved) {
+                    val command=v.notificationId==VOICE_COMMAND_ID
+                    voiceHeader=ellipsize(if(command)"VOICE COMMAND" else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
+                    // A command's result says what was done ("Opening Grok Bot on the phone").
+                    val shown=when(v.phase) { VoicePhase.SENT->v.text.ifBlank{"Sent"}; VoicePhase.STARTING->"Starting…"
+                        VoicePhase.LISTENING->v.text.ifBlank{if(command)"Say \"open Grok Bot\"" else "Speak now…"}; else->v.text }
                     voiceLines=wrap(shown,VOICE_SIZE,cardW-32f,4)
                 }
             }
@@ -364,7 +374,7 @@ class HudRenderer(context: Context) {
                 // Home screen: the session now stays open without a trip, so notifications can arrive here.
                 // No trip: the screen is the player when music plays, otherwise black (transparent). A
                 // notification card replaces it. Only a lost phone link says anything.
-                if(s.notification==null) {
+                if(s.notification==null && s.voice==null) {
                     if(s.mediaVisible) media(c,18f,110f)
                     else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,30f,204)
                 }
@@ -384,7 +394,7 @@ class HudRenderer(context: Context) {
     fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c)}
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
-            if(s.notification==null) {
+            if(s.notification==null && s.voice==null) {
                 if(s.mediaVisible) media(c,18f,408f)
                 else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,28f,204)
             }
@@ -411,7 +421,7 @@ class HudRenderer(context: Context) {
         if(d!=null) {
             text(c,detourSaving,18f,458f,28f,b=true)
             text(c,compactVia,18f,488f,18f,217)
-            text(c,"Tap: take · double tap: keep",18f,522f,16f,191)
+            text(c,"TAP  take  ·  2× TAP  keep",18f,522f,16f,191)
         } else {
             val m=s.maneuver
             if(m!=null) {

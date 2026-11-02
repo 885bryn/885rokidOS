@@ -1,6 +1,7 @@
 package com.rokidnav.phone.voice
 
 import com.rokidnav.phone.glasses.GlassesLink
+import com.rokidnav.protocol.VOICE_COMMAND_ID
 import com.rokidnav.protocol.VoicePhase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -37,6 +38,7 @@ fun interface ReplySender { fun reply(notificationId: String, text: String): Boo
  * is ready, so nothing said right after the tap is lost), show the words as they come, stop when the speaker pauses (or
  * taps, or after [MAX_LISTEN_MS]), let the user confirm, then send. Every step is reported with [report], which may be
  * called from [work]. Nothing is sent without [send]. Message text is never logged here.
+ * The id [VOICE_COMMAND_ID] marks a spoken command instead of a reply: after listening it is acted on at once ("open Grok Bot").
  */
 class VoiceReplyController(
     private val scope: CoroutineScope,
@@ -47,6 +49,8 @@ class VoiceReplyController(
     private val work: CoroutineContext = EmptyCoroutineContext,
     /** Debug aid: every microphone chunk, to keep the last recording for analysis. */
     private val onAudio: ((ByteArray) -> Unit)? = null,
+    /** The "open Grok Bot" command: null when Grok Bot was opened, otherwise the reason it was not ([GrokBot.open]). */
+    private val openGrokBot: (() -> String?)? = null,
     private val report: (VoicePhase, String, String) -> Unit,
 ) {
     private var job: Job? = null
@@ -81,8 +85,13 @@ class VoiceReplyController(
     private fun cancelJob() { job?.cancel(); job = null }
 
     private suspend fun listen(id: String) = coroutineScope {
-        // The model loads while the microphone already runs.
-        val loading: Deferred<Transcription?> = async { transcriber.begin() }
+        // The model loads while the microphone already runs. A load that throws (no native library: UnsatisfiedLinkError, or a
+        // broken model file) counts as no model: thrown here it would end this job and, with no handler, crash the app.
+        var loadError = ""
+        val loading: Deferred<Transcription?> = async {
+            try { transcriber.begin() } catch (e: CancellationException) { throw e } catch (e: Throwable) { loadError = "Speech engine failed: ${e.javaClass.simpleName}"; null }
+        }
+        fun noModel() = loadError.ifEmpty { "Speech model missing" }
         if (!link.startAudio()) {
             report(VoicePhase.FAILED, id, "Glasses microphone not available")
             loading.cancel(); loading.invokeOnCompletion { runCatching { loading.getCompleted()?.close() } }
@@ -115,7 +124,7 @@ class VoiceReplyController(
                     }
                     val watcher = launch { while (!stopNow) delay(50); throw EndOfSpeech() }
                     // No model on the phone: say so now, not when the first audio arrives.
-                    val modelCheck = launch { if (loading.await() == null) { report(VoicePhase.FAILED, id, "Speech model missing"); throw ModelMissing() } }
+                    val modelCheck = launch { if (loading.await() == null) { report(VoicePhase.FAILED, id, noModel()); throw ModelMissing() } }
                     try { collector.join() } finally { watcher.cancel(); modelCheck.cancel() }
                 }
             }
@@ -130,14 +139,24 @@ class VoiceReplyController(
         link.stopAudio()
         audioEnded.complete(Unit)
         val engine = speech ?: runCatching { loading.await() }.getOrNull()
-        if (engine == null) { if (words.isBlank()) report(VoicePhase.FAILED, id, "Speech model missing"); return@coroutineScope }
+        if (engine == null) { if (words.isBlank()) report(VoicePhase.FAILED, id, noModel()); return@coroutineScope }
         engine.use {
             while (held.isNotEmpty()) words = it.accept(held.removeFirst())
             val finalText = it.finish().ifBlank { words }
             if (finalText.isBlank()) { report(VoicePhase.FAILED, id, "Heard nothing"); return@use }
+            // A command has no check step: opening an app sends nothing and is undone with one gesture on the phone.
+            if (id == VOICE_COMMAND_ID) { command(finalText); return@use }
             reviewed = finalText
             report(VoicePhase.REVIEW, id, Dictation.format(finalText))
         }
+    }
+
+    private fun command(heard: String) {
+        val id = VOICE_COMMAND_ID
+        if (!VoiceCommands.opensGrokBot(heard)) { report(VoicePhase.FAILED, id, "Heard \"${Dictation.format(heard)}\". Say \"open Grok Bot\""); return }
+        val open = openGrokBot
+        val problem = if (open == null) "Opening apps is not set up" else runCatching { open() }.getOrElse { "Could not open Grok Bot" }
+        report(if (problem == null) VoicePhase.SENT else VoicePhase.FAILED, id, problem ?: "Opening Grok Bot on the phone")
     }
 
     private class EndOfSpeech : RuntimeException()

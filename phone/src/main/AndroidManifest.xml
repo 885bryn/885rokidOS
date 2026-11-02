@@ -19,6 +19,10 @@
     <!-- Voice replies: speech to text on the phone. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Voice command "open Grok Bot": Android 10+ lets a background app open another app only with this grant
+         (Settings, Apps, 885rokidOS, Display over other apps). Declaring it is what makes that switch appear. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Glasses link without a trip (GlassesLinkService). Android 14 requires one of a set of
          permissions for this type; CHANGE_NETWORK_STATE is install-time, so it is always granted. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
@@ -29,6 +33,8 @@
         <package android:name="com.rokid.sprite.aiapp" />
         <package android:name="com.rokid.sprite.global.aiapp" />
         <package android:name="com.rokid.uxr" />
+        <!-- Grok Bot (voice command); keep equal to GrokBot.PACKAGE. -->
+        <package android:name="ai.x.grok.bot" />
     </queries>
 
     <application

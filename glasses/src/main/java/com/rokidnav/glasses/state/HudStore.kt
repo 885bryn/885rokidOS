@@ -21,9 +21,10 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     private var lastMediaKey:GlassesKey?=null
     private var lastMediaKeyAt=0L
     private var arrivedAt=0L
+    private var wokeAt=Long.MIN_VALUE/2
     private fun resultOver(s:HudState,now:Long)=s.voice!=null && (s.voice.phase==VoicePhase.SENT || s.voice.phase==VoicePhase.FAILED) && now-s.voiceAt>=REPLY_RESULT_MS
     /** The HUD came to the front. If no card caused that, the user did (a touch woke the glasses): show the player. */
-    fun onUserWake(){mutable.update {if(it.notification==null)it.copy(mediaShown=true,mediaShownAt=clock()) else it}}
+    fun onUserWake(){wokeAt=clock();mutable.update {if(it.notification==null)it.copy(mediaShown=true,mediaShownAt=clock()) else it}}
     /** A new phone session began (HelloRequest): the phone may have restarted and count from a lower number. */
     fun resetSequence(){lastSeq=-1L}
     fun onConnection(connected:Boolean){mutable.update {it.copy(linkConnected=connected)}}
@@ -115,22 +116,27 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             // A detour offer hides the card, so its taps above win; otherwise a tap only hides the card.
             s.voice!=null->voiceKey(s,s.voice,key)
             // A card whose app has a reply box: tap starts a voice reply (shown at once; the phone confirms).
-            s.replyAvailable && key==GlassesKey.TAP->{
-                val id=s.notification!!.id
-                sendAction(GlassesAction(0,ActionType.VOICE_START,id))
-                mutable.update {it.copy(voice=VoiceState(0,VoicePhase.STARTING,id),voiceAt=clock())}
-            }
+            s.replyAvailable && key==GlassesKey.TAP->startVoice(s.notification!!.id)
             // Tap or double tap closes a card; the double tap does not also leave the app.
-            s.notification!=null && (key==GlassesKey.TAP || back)->mutable.update {it.copy(notification=null)}
-            // No trip and music playing: the idle screen is the player.
-            // The first touch only brings the player up (it must be seen before it is controlled); the same gesture
-            // arriving again by another input path is dropped by the media key guard.
-            idleMedia(s) && !s.mediaShown && (key==GlassesKey.TAP || key==GlassesKey.SWIPE_FORWARD || key==GlassesKey.SWIPE_BACK)->{
+            s.notification!=null && (key==GlassesKey.TAP || back)->{
+                lastMediaKey=key;lastMediaKeyAt=clock()
+                mutable.update {it.copy(notification=null)}
+            }
+            // No trip and the player on screen: tap plays or pauses, swipe skips.
+            idleMedia(s) && s.mediaShown && !back->mediaKey(key)
+            // No trip and nothing on screen: tap speaks a command to the phone ("open Grok Bot"). The tap that closed a card
+            // or a voice result, arriving again by another input path, or the touch that woke the glasses, is not one.
+            idle(s) && key==GlassesKey.TAP && s.linkConnected->{
+                val now=clock()
+                if(!(lastMediaKey==key && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS) && now-wokeAt>=MEDIA_KEY_GAP_MS)startVoice(VOICE_COMMAND_ID)
+            }
+            // Music but the player hidden: a swipe brings it up (it must be seen before it is controlled); the same
+            // gesture arriving again by another input path is dropped by the media key guard.
+            idleMedia(s) && !back->{
                 lastMediaKey=key;lastMediaKeyAt=clock()
                 mutable.update {it.copy(mediaShown=true,mediaShownAt=clock())}
             }
-            idleMedia(s) && (key==GlassesKey.TAP || key==GlassesKey.SWIPE_FORWARD || key==GlassesKey.SWIPE_BACK)->mediaKey(key)
-            // No trip, nothing on screen: tap and swipe have nothing to act on.
+            // No trip, nothing to act on.
             idle(s) && !back->Unit
             key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
             key==GlassesKey.SWIPE_FORWARD->{mutable.update {it.copy(mapZoom=(it.mapZoom-1).coerceAtLeast(0))};sendAction(GlassesAction(0,ActionType.ZOOM_IN))}
@@ -139,6 +145,13 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK->return false
         }
         return true
+    }
+    /** Starts a voice reply to card [id], or a command ([VOICE_COMMAND_ID]); shown at once, the phone confirms. */
+    private fun startVoice(id:String) {
+        // The same tap may arrive again by another input path; the voice key guard drops it (see mediaKey).
+        lastMediaKey=GlassesKey.TAP;lastMediaKeyAt=clock()
+        sendAction(GlassesAction(0,ActionType.VOICE_START,id))
+        mutable.update {it.copy(voice=VoiceState(0,VoicePhase.STARTING,id),voiceAt=clock(),mediaShown=false)}
     }
     private fun sameOnScreen(a:MediaState?,b:MediaState?)=if(a==null || b==null)a==b else
         a.app==b.app && a.title==b.title && a.artist==b.artist && a.playing==b.playing

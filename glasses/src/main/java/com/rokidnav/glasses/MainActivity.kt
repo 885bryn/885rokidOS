@@ -56,7 +56,7 @@ class MainActivity:AppCompatActivity() {
         hud.setOnTouchListener { _,event -> gestures.onTouchEvent(event) }
         hud.post {vm.onDisplayReady(hud.width,hud.height)}
         lifecycleScope.launch {repeatOnLifecycle(Lifecycle.State.STARTED){vm.store.state.collect {hud.render(it);keepScreenOn(it)}}}
-        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media).
+        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|command).
         // The big message numbers make the store ignore the demo trip's own messages.
         if(BuildConfig.DEBUG)intent.getStringExtra("previewScene")?.let {scene->
             val n=1_000_000_000L
@@ -65,6 +65,8 @@ class MainActivity:AppCompatActivity() {
             if(scene=="media") {
                 store.onMessage(com.rokidnav.protocol.MediaState(n+1,true,"Spotify","Midnight City, a very long track title that wraps","M83",true,0,0))
                 store.onUserWake()
+            } else if(scene=="command") {
+                store.onMessage(com.rokidnav.protocol.VoiceState(n+1,com.rokidnav.protocol.VoicePhase.LISTENING,com.rokidnav.protocol.VOICE_COMMAND_ID,"open grok bot"))
             } else {
                 store.onMessage(com.rokidnav.protocol.PhoneNotification(n+1,"n1","WhatsApp","Sam Carter","Hey, are we still on for dinner tonight? I booked a table at the new place on Main Street for 7:30, but I can move it to 8 if you need more time after work.",canReply=true))
                 val phase=when(scene){"listening"->com.rokidnav.protocol.VoicePhase.LISTENING;"review"->com.rokidnav.protocol.VoicePhase.REVIEW;"sent"->com.rokidnav.protocol.VoicePhase.SENT;"failed"->com.rokidnav.protocol.VoicePhase.FAILED;else->null}
@@ -112,7 +114,7 @@ class MainActivity:AppCompatActivity() {
     private fun keepScreenOn(s:com.rokidnav.glasses.state.HudState) {
         val live=s.navState in HOLD_SCREEN && s.linkConnected && !s.phoneSilent
         // VERIFY: whether a card wakes a display that is already asleep; this only keeps an awake one on.
-        val hold=live || s.notification!=null
+        val hold=live || s.notification!=null || s.voice!=null
         if(hold!=screenHeld) {
             screenHeld=hold
             if(hold)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

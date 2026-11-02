@@ -270,11 +270,11 @@ class HudStoreTest {
         assertEquals(false,hud.state.value.mediaShown)
     }
 
-    @Test fun theFirstTouchOnlyShowsThePlayerAndItHidesAfterTenSeconds() {
+    @Test fun theFirstSwipeOnlyShowsThePlayerAndItHidesAfterTenSeconds() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
-        hud.onMessage(media(1))
-        hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.TAP)
+        hud.onConnection(true);hud.onMessage(media(1))
+        hud.onKey(GlassesKey.SWIPE_FORWARD);hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(true,hud.state.value.mediaVisible)
         assertEquals(emptyList<ActionType>(),sent.map {it.action})
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
@@ -283,6 +283,60 @@ class HudStoreTest {
         assertEquals(true,hud.state.value.mediaVisible)
         now+=2_000;hud.tick()
         assertEquals(false,hud.state.value.mediaVisible)
+    }
+
+    @Test fun tapOnTheEmptyIdleScreenSpeaksACommandEvenWithMusicPlaying() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        // No phone link: nothing would answer, so the tap does nothing.
+        hud.onKey(GlassesKey.TAP)
+        assertNull(hud.state.value.voice)
+        hud.onConnection(true);hud.onMessage(media(1))
+        // Music plays, the player is hidden: a tap (reported twice) starts one command, not the player.
+        hud.onKey(GlassesKey.TAP);now+=15;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+        assertEquals(com.rokidnav.protocol.VOICE_COMMAND_ID,sent.single().targetId)
+        assertEquals(com.rokidnav.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
+        assertEquals(false,hud.state.value.mediaVisible)
+        // Then it works like a reply: tap stops listening, the result shows and goes away.
+        hud.onMessage(com.rokidnav.protocol.VoiceState(2,com.rokidnav.protocol.VoicePhase.LISTENING,com.rokidnav.protocol.VOICE_COMMAND_ID,"open"))
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(ActionType.VOICE_STOP,sent.last().action)
+        hud.onMessage(com.rokidnav.protocol.VoiceState(3,com.rokidnav.protocol.VoicePhase.SENT,com.rokidnav.protocol.VOICE_COMMAND_ID,"Opening Grok Bot on the phone"))
+        now+=HudStore.REPLY_RESULT_MS;hud.tick()
+        assertNull(hud.state.value.voice)
+        // On a trip a tap still changes the view, never starts a command.
+        sent.clear();hud.onMessage(com.rokidnav.protocol.NavStateUpdate(4,com.rokidnav.protocol.NavState.ACTIVE))
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        assertEquals(HudMode.Map,hud.state.value.mode)
+    }
+
+    @Test fun aRepeatedTapOrTheWakingTouchNeverStartsACommandByAccident() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true)
+        // The tap that closes a card arrives again by another input path.
+        hud.onMessage(replyCard(canReply=false));hud.onKey(GlassesKey.TAP);now+=40;hud.onKey(GlassesKey.TAP)
+        // The tap that closes a voice result does too.
+        hud.onMessage(com.rokidnav.protocol.VoiceState(cardSeq++,com.rokidnav.protocol.VoicePhase.FAILED,com.rokidnav.protocol.VOICE_COMMAND_ID,"Heard nothing"))
+        now+=1_000;hud.onKey(GlassesKey.TAP);now+=40;hud.onKey(GlassesKey.TAP)
+        // The touch that woke the glasses.
+        now+=1_000;hud.onUserWake();hud.onKey(GlassesKey.TAP)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        // A deliberate tap afterwards does start one.
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+    }
+
+    @Test fun doubleTapCancelsACommandAndStaysInTheApp() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onKey(GlassesKey.TAP)
+        now+=1_000
+        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))
+        assertEquals(ActionType.VOICE_CANCEL,sent.last().action)
+        assertNull(hud.state.value.voice)
     }
 
     private var cardSeq=100L

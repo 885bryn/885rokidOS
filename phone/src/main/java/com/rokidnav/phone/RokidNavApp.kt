@@ -77,6 +77,7 @@ class RokidNavApp : Application() {
             voiceWork = Dispatchers.Default,
             // Debug builds keep the last spoken reply's audio on the phone (private folder) to diagnose recognition.
             voiceAudio = if(BuildConfig.DEBUG)lastVoiceRecorder(java.io.File(filesDir,"voice-last.pcm")) else null,
+            openGrokBot = {com.rokidnav.phone.voice.GrokBot.open(this)},
         )
         coordinator.start()
         media.start()

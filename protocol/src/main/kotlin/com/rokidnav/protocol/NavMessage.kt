@@ -218,6 +218,13 @@ data class VoiceState(
     val text: String = "",
 ) : NavMessage
 
+/**
+ * [VoiceState.notificationId] and the VOICE_* actions' targetId for a spoken command (tap on the empty idle screen),
+ * not a reply to a notification. The same messages carry it: VOICE_START / VOICE_STOP / VOICE_CANCEL, then
+ * LISTENING, SENT (text = what was done) or FAILED (text = the reason). Commands have no REVIEW step.
+ */
+const val VOICE_COMMAND_ID = "voice-command"
+
 // ---------------------------------------------------------------- glasses -> phone
 
 @Serializable @SerialName("hello")
