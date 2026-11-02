@@ -31,6 +31,7 @@ class PhoneNotificationListener : NotificationListenerService() {
             Log.i(TAG, "dropped by filter pkg=${notice.packageName} category=${notice.category} ongoing=${notice.ongoing} summary=${notice.groupSummary}")
             return
         }
+        RokidNavApp.instance.replies.remember(sbn)
         val body = notice.title + "\n" + notice.text
         if (lastSent.put(sbn.key, body) == body) return
         RokidNavApp.instance.coordinator.forwardNotification(
@@ -50,6 +51,7 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         lastSent.remove(sbn.key)
+        RokidNavApp.instance.replies.forget(sbn.key)
     }
 
     private fun appLabel(pkg: String): String = runCatching {

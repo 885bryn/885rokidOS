@@ -47,6 +47,9 @@ class NavSessionCoordinatorTest {
             return true
         }
         override fun disconnect() { disconnects++; state.value = LinkState.Authorized }
+        override val audio = emptyFlow<ByteArray>()
+        override fun startAudio() = false
+        override fun stopAudio() {}
     }
     @Test fun keepsTheGlassesSessionOpenWithoutATrip() = runTest {
         val engine = Engine()

@@ -43,6 +43,8 @@ class RokidNavApp : Application() {
         private set
     lateinit var media:com.rokidnav.phone.media.MediaMonitor
         private set
+    lateinit var replies:com.rokidnav.phone.notify.NotificationReplier
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -53,6 +55,7 @@ class RokidNavApp : Application() {
         settings=com.rokidnav.phone.settings.SettingsRepository(this)
         traffic=TrafficMonitor(routesApi,navEngine)
         media=com.rokidnav.phone.media.MediaMonitor(this)
+        replies=com.rokidnav.phone.notify.NotificationReplier(this)
         policeProvider=WzSabrePoliceProvider(AndroidSabreClient(this), navEngine.position)
         coordinator = NavSessionCoordinator(
             scope = appScope,

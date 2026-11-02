@@ -22,6 +22,8 @@ class CxrGlassesLink(private val context:Context):GlassesLink {
     override val state=mutableState.asStateFlow()
     private val messages=MutableSharedFlow<NavMessage>(extraBufferCapacity=64,onBufferOverflow=BufferOverflow.DROP_OLDEST)
     override val incoming=messages.asSharedFlow()
+    private val audioChunks=MutableSharedFlow<ByteArray>(extraBufferCapacity=256,onBufferOverflow=BufferOverflow.DROP_OLDEST)
+    override val audio=audioChunks.asSharedFlow()
     private val manager by lazy {CxrSessionManager.getInstance(context.applicationContext)}
     private val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
     private val main=Handler(Looper.getMainLooper())
@@ -41,8 +43,8 @@ class CxrGlassesLink(private val context:Context):GlassesLink {
         if(state.value==LinkState.Authorizing)return
         mutableState.value=LinkState.Authorizing
         try {
-            // Device management is used to install and launch the glasses app.
-            manager.requestAuthorization(activity,listOf(GlassPermission.DEVICE_MANAGE)){result->onMain {acceptAuth(result)}}
+            // Device management installs and launches the glasses app; the microphone is for voice replies.
+            manager.requestAuthorization(activity,listOf(GlassPermission.DEVICE_MANAGE,GlassPermission.MICROPHONE)){result->onMain {acceptAuth(result)}}
         } catch(_:Exception){mutableState.value=LinkState.Failed("Could not open Rokid authorization. Open Hi Rokid and try again.")}
     }
     fun onAuthorizationResult(resultCode:Int,data:Intent?) {
@@ -112,6 +114,11 @@ class CxrGlassesLink(private val context:Context):GlassesLink {
                             mutableState.value=connectionFailure!!
                         }
                     }}
+                })
+                created.addAudioCallback(object:IAudioCallback {
+                    override fun onAudioReceived(data:ByteArray){audioChunks.tryEmit(data)}
+                    override fun onAudioError(code:Int,message:String?){Log.w(TAG,"audio_error code=$code")}
+                    override fun onAudioStreamStateChanged(active:Boolean){Log.i(TAG,"audio_stream active=$active")}
                 })
                 created.addCustomCmdCallback(object:ICustomCmdSessionCallback {
                     override fun onCustomCmdResult(key:String,data:ByteArray?){if(attempt==generation)onFrame(key,data,attempt)}
@@ -200,6 +207,15 @@ class CxrGlassesLink(private val context:Context):GlassesLink {
             session?.sendCustomCmd(Channels.PHONE_TO_GLASSES,caps,ByteArray(0))?.isSuccess==true
         }.getOrDefault(false)
     }
+    override fun startAudio():Boolean {
+        if(state.value!=LinkState.Ready)return false
+        return runCatching {
+            val result=session?.startAudioStream()
+            Log.i(TAG,"audio_start success=${result?.isSuccess} code=${result?.code?.name}")
+            result?.isSuccess==true
+        }.getOrDefault(false)
+    }
+    override fun stopAudio(){runCatching {session?.stopAudioStream()}}
     override fun disconnect(){generation++;session?.close();session=null;mutableState.value=if(token==null)LinkState.Idle else LinkState.Authorized}
 
     private companion object {

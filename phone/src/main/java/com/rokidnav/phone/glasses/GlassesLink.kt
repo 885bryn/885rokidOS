@@ -27,6 +27,13 @@ interface GlassesLink {
     /** Returns false (and drops the message) unless state is [LinkState.Ready]. */
     fun send(message: NavMessage): Boolean
 
+    /** Raw chunks from the glasses' microphone while [startAudio] is on. The format is VERIFY (see VoiceSpike). */
+    val audio: Flow<ByteArray>
+
+    /** Starts the microphone stream. False (and nothing happens) unless state is [LinkState.Ready]. */
+    fun startAudio(): Boolean
+    fun stopAudio()
+
     fun disconnect()
 }
 

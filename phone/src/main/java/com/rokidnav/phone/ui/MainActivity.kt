@@ -37,6 +37,14 @@ class MainActivity:ComponentActivity() {
             events.add(0,if(success)"HUD installer saved. Open Hi Rokid → Toolbox → Glasses app management." else "Could not save the HUD installer.")
         }
     }
+    private val recordAudio=registerForActivityResult(ActivityResultContracts.RequestPermission()) {granted->
+        if(granted)startVoiceTest() else events.add(0,"Voice test needs the microphone permission.")
+    }
+    private fun voiceTest() {
+        if(androidx.core.content.ContextCompat.checkSelfPermission(this,android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED)startVoiceTest()
+        else recordAudio.launch(android.Manifest.permission.RECORD_AUDIO)
+    }
+    private fun startVoiceTest()=lifecycleScope.launch {com.rokidnav.phone.voice.VoiceSpike(applicationContext,app.glassesLink).run(6) {events.add(0,it)}}
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {app.glassesLink.incoming.collect {message->
@@ -60,7 +68,7 @@ class MainActivity:ComponentActivity() {
                     2->SettingsScreen(app)
                     else->SetupScreen(app.glassesLink,events,
                     authorize={app.glassesLink.authorize(this@MainActivity)},connect=app.glassesLink::connect,installWithRokid={installWithHiRokidOpen()},
-                    openRokid={openRokid()},test={sendHudTest()},export={exportHud.launch("RokidNav-HUD.apk")},preview={startActivity(Intent().setClassName(BuildConfig.GLASSES_PACKAGE,BuildConfig.GLASSES_ACTIVITY).putExtra("demo",true).putExtra("phonePreview",true))})
+                    openRokid={openRokid()},test={sendHudTest()},voiceTest={voiceTest()},export={exportHud.launch("RokidNav-HUD.apk")},preview={startActivity(Intent().setClassName(BuildConfig.GLASSES_PACKAGE,BuildConfig.GLASSES_ACTIVITY).putExtra("demo",true).putExtra("phonePreview",true))})
                     }
                     }
                 }
@@ -114,7 +122,7 @@ class MainActivity:ComponentActivity() {
 }
 
 @Composable
-private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,connect:()->Unit,installWithRokid:()->Unit,openRokid:()->Unit,test:()->Unit,export:()->Unit,preview:()->Unit) {
+private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,connect:()->Unit,installWithRokid:()->Unit,openRokid:()->Unit,test:()->Unit,voiceTest:()->Unit,export:()->Unit,preview:()->Unit) {
     val state by link.state.collectAsState()
     var environment by remember {mutableStateOf<EnvironmentStatus?>(null)}
     var checkError by remember {mutableStateOf(false)}
@@ -138,7 +146,7 @@ private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,
             Button(onClick=authorize,enabled=!busy && environment is EnvironmentStatus.Ok){Text(if(state==LinkState.Authorizing)"Approve on the Rokid screen" else "Authorize glasses")}
         }
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
-        if(state==LinkState.Ready){OutlinedButton(onClick=test){Text("Send HUD test")};TextButton(onClick=link::disconnect){Text("Disconnect")}}
+        if(state==LinkState.Ready){OutlinedButton(onClick=test){Text("Send HUD test")};if(BuildConfig.DEBUG)OutlinedButton(onClick=voiceTest){Text("Voice test (speak for 6 s)")};TextButton(onClick=link::disconnect){Text("Disconnect")}}
         if(BuildConfig.DEBUG){
             HorizontalDivider(color=Color(0xFF25382D))
             Text("HUD preview",style=MaterialTheme.typography.titleMedium)

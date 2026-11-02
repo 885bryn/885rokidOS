@@ -115,7 +115,7 @@ Dual monochrome green micro-LED waveguides, ~480×398 per eye (one source says 6
   This is an environment workaround, not a required project-wide Gradle setting.
 - M3 wiring uses verified `com.rokid.cxr.session` types. `onConnectResult`'s `SessionErrorCode`
   argument is **nullable** in Kotlin. Authorization requests `DEVICE_MANAGE` for app install/launch
-  (885rokidOS leaves device brightness alone); camera/microphone/media permissions are not requested.
+  (885rokidOS leaves device brightness alone); the microphone permission is requested too (2026-11-01, voice replies); camera and media are not.
 - Only the link wrapper parses auth results and retains the token. Callbacks are attached before
   `connect()`. Connection callbacks are guarded by an attempt generation so an old session cannot
   overwrite a newer session's state. Capability calls require Ready.
