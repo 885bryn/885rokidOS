@@ -30,7 +30,10 @@ enum class GlassesKey {
 
     companion object {
         fun fromKeyType(t: KeyType): GlassesKey? = when (t) {
-            KeyType.CLICK -> TAP
+            // The CLICK broadcast is the camera button (BUTTON_DOWN, BUTTON_UP, camera starts, then CLICK;
+            // measured 2026-11-01). The touchpad never sends it: a touchpad tap is key 83 then ENTER (-> TAP
+            // below). Mapping CLICK to TAP made every photo pause the music, so the camera keeps its button.
+            KeyType.CLICK -> null
             KeyType.DOUBLE_CLICK -> DOUBLE_TAP
             KeyType.TWO_FINGER_SWIPE_FORWARD -> SWIPE_FORWARD
             KeyType.TWO_FINGER_SWIPE_BACK -> SWIPE_BACK

@@ -6,6 +6,7 @@ Read this first, then `docs/TASKS.md` to pick up the next milestone. Specs live 
 Personal Google-Maps-style navigation HUD for **Rokid Glasses**. The user picks a destination/route on
 an **Android phone**; the phone runs Google guidance and streams compact navigation data to a
 **glasses-side Android app** that draws its own HUD. See `docs/ARCHITECTURE.md`.
+The product is called **885rokidOS** (2026-11-01); package ids stay `com.rokidnav.*`.
 Scope is growing (2026-10-31): the app becomes the user's only glasses app, replacing Rokid's built-in
 features (notifications first, then music, calls). These features work whenever the phone app is
 connected, not only while navigating.

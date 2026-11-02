@@ -21,7 +21,7 @@ class NavForegroundService:Service() {
         val end=PendingIntent.getService(this,1,Intent(this,NavForegroundService::class.java).setAction(END),PendingIntent.FLAG_IMMUTABLE)
         val show=PendingIntent.getService(this,2,Intent(this,NavForegroundService::class.java).setAction(SHOW),PendingIntent.FLAG_IMMUTABLE)
         val notification=NotificationCompat.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_menu_directions)
-            .setContentTitle("Rokid navigation").setContentText("Guidance is running. Keep Hi Rokid connected.")
+            .setContentTitle("885rokidOS navigation").setContentText("Guidance is running. Keep Hi Rokid connected.")
             .setContentIntent(open).setOngoing(true).setSilent(true).addAction(0,"Show on glasses",show).addAction(0,"End navigation",end).build()
         startForeground(71,notification)
         scope.launch {(application as RokidNavApp).navEngine.navState.collectLatest {

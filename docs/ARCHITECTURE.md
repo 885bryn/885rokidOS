@@ -63,7 +63,7 @@ Not planned, but `GlassesLink` is the seam if it's ever wanted.
   remaining M3 gestures, payload limits and AI pause/resume still need validation.
 - Glasses keys arrive as system broadcasts (`com.android.action.ACTION_SPRITE_BUTTON_CLICK`, `..._DOUBLE_CLICK`,
   `..._LONG_PRESS`, two-finger tap/swipe, `ACTION_AI_START`, ...) plus normal `onKeyDown` KeyEvents.
-- Brightness/volume: `session.setGlassBrightness(0..100)`, `setGlassVolume`. Rokid Nav does not call
+- Brightness/volume: `session.setGlassBrightness(0..100)`, `setGlassVolume`. 885rokidOS does not call
   them: the glasses keep the user's global Rokid brightness.
 
 ## Glasses hardware (from reviews, unverified)
@@ -115,7 +115,7 @@ Dual monochrome green micro-LED waveguides, ~480×398 per eye (one source says 6
   This is an environment workaround, not a required project-wide Gradle setting.
 - M3 wiring uses verified `com.rokid.cxr.session` types. `onConnectResult`'s `SessionErrorCode`
   argument is **nullable** in Kotlin. Authorization requests `DEVICE_MANAGE` for app install/launch
-  (Rokid Nav leaves device brightness alone); camera/microphone/media permissions are not requested.
+  (885rokidOS leaves device brightness alone); camera/microphone/media permissions are not requested.
 - Only the link wrapper parses auth results and retains the token. Callbacks are attached before
   `connect()`. Connection callbacks are guarded by an attempt generation so an old session cannot
   overwrite a newer session's state. Capability calls require Ready.
@@ -184,7 +184,7 @@ Dual monochrome green micro-LED waveguides, ~480×398 per eye (one source says 6
   session and the phone gets no signal when the HUD returns, so auto-reconnect would pop the HUD back up
   after a deliberate exit. Instead the link reports `Closed(GLASSES_APP_EXIT)`, the phone shows
   **Show on glasses** (nav screen and the ongoing notification), which reconnects, reopens the HUD and
-  resyncs; the HUD replaces guidance with "Phone not sending · Rokid Nav → Show on glasses" after 12 s
+  resyncs; the HUD replaces guidance with "Phone not sending · 885rokidOS → Show on glasses" after 12 s
   without phone messages mid-trip.
 - Google remains the source for planned search/routes/navigation/phone map. OSM is currently the
   street-geometry source for the custom HUD. A Google renderer on the glasses is an alternative to
@@ -204,7 +204,7 @@ Dual monochrome green micro-LED waveguides, ~480×398 per eye (one source says 6
 - Overnight drain (reported 2026-10-19): the phone held its CXR session open indefinitely after a trip,
   which keeps the HUD app running on the glasses, and older HUDs held the screen on permanently. The HUD
   holds the screen only while guiding; otherwise the display sleeps normally.
-- Always-on session (2026-10-31): Rokid Nav is growing past navigation (notifications first), so the
+- Always-on session (2026-10-31): 885rokidOS is growing past navigation (notifications first), so the
   phone no longer closes the session after 3 min without a trip. It opens the session right after
   authorization, when the phone app comes to the front and when a trip starts. `GlassesLinkService`
   (foreground, type connectedDevice) keeps the phone process alive meanwhile. The HUD finishes itself

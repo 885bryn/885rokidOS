@@ -72,6 +72,11 @@ map turned off. Third view in the tap cycle; no map frames are drawn, so it uses
 - **Arrived** — big check + destination name for 10 s, then idle screen.
 
 ## Input map
+**Measured on hardware (2026-11-01):** a touchpad tap reaches the HUD as key 83 then ENTER (66); one swipe as key 83 then
+DPAD_RIGHT (22) and DPAD_DOWN (20), so a swipe is reported twice; the **camera button** sends the broadcasts
+BUTTON_DOWN, BUTTON_UP and, after the camera starts, CLICK. The HUD ignores those broadcasts: the camera owns the
+button, and treating CLICK as a tap paused the music on every photo.
+
 Rokid temple touchpad. Broadcast names from the CXR docs; single-finger swipe delivery is unknown
 (probably KeyEvents) — log raw events on hardware in M3 and adjust `GlassesKey.fromKeyCode`.
 
@@ -85,7 +90,7 @@ Rokid temple touchpad. Broadcast names from the CXR docs; single-finger swipe de
 
 ## Beyond navigation (2026-10-31)
 
-Rokid Nav is also the glasses' notification and music screen. These screens work with or without a trip
+885rokidOS is also the glasses' notification and music screen. These screens work with or without a trip
 and use a **larger type scale** than the trip HUD: titles 26–34 px, body 22–26 px, labels 17–18 px,
 nothing under 17. The trip HUD keeps its own sizes (user decision: leave it alone).
 Mockups: `Media.dc.html`, `Notification.dc.html`. Expanded view coordinates; the corner (upright) view
@@ -95,7 +100,7 @@ uses the same blocks lower on the 480×640 view.
 1. a phone notification card (replaces everything for its lifetime);
 2. music playing or paused in a phone media session: the media screen;
 3. the phone link is lost: "Phone not connected" (30 px).
-The old "Rokid Nav / Ready / Start a trip" screen is gone. After a card expires the display shows only
+The old "885rokidOS / Ready / Start a trip" screen is gone. After a card expires the display shows only
 what is left in that list, never the old screen.
 
 **Media screen.** App name 18/700 caps @70% and a state icon (two bars playing, triangle paused) in the
@@ -109,7 +114,16 @@ media screen is not shown. The phone reads the session through Notification acce
 **Notification card.** App name 17/700 caps, title 26/700 (one line), text wrapped (22 px, up to 6 lines;
 20 px, 4 lines beside the turn arrow on a trip). The phone sends up to 60 characters of title and 300 of
 text (the notification's full "big text", line breaks joined). Shown 6 s, plus 60 ms per character up to
-15 s; a tap hides it. The card wakes a sleeping display. A detour offer hides the card.
+15 s; a tap hides it. The card wakes a sleeping display. The top-right corner shows the seconds left (26 px bold),
+redrawn once a second. Proposal for replies, actions and a Home menu: `docs/INTERACTION.md`. A detour offer hides the card.
+
+## Known limits (2026-11-01)
+- **Camera.** The camera button owns its press (the HUD ignores the CLICK broadcast it sends). A **photo** keeps the
+  music playing and the HUD in front. **Video recording stops the phone's music** and sends the glasses to the
+  Rokid menu instead of back to the HUD. The cause is on the Rokid side (not our pause, as with photos); this is
+  accepted for now. The HUD session closes (`GLASSES_APP_EXIT`) and reopens when the phone app is opened or the
+  HUD is started again from the Rokid menu.
+- One swipe reports two direction keys (22, then 20); media keys are de-duplicated, the trip zoom may double.
 
 ## Menu (removed 2026-10-20)
 The HUD has no menu. Touch and hold starts the Rokid AI assistant and the glasses never delivered the

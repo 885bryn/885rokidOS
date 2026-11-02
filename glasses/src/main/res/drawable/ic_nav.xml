@@ -1,4 +1,6 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
     <path android:fillColor="#000000" android:pathData="M0,0H48V48H0Z" />
-    <path android:fillColor="@android:color/transparent" android:strokeColor="#3DFF8A" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,38V22Q12,15 19,15H36M28,7L36,15L28,23" />
+    <!-- Two lenses = glasses = an "8" on its side (885). The dot is the display. -->
+    <path android:fillColor="@android:color/transparent" android:strokeColor="#3DFF8A" android:strokeWidth="3.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M7,24a9,9 0 1,0 18,0a9,9 0 1,0 -18,0M23,24a9,9 0 1,0 18,0a9,9 0 1,0 -18,0" />
+    <path android:fillColor="#3DFF8A" android:pathData="M32,21.5a2.5,2.5 0 1,0 0.01,0Z" />
 </vector>

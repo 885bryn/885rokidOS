@@ -8,7 +8,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
-/** "HUD installed" after an install done with Hi Rokid on screen; tapping it returns to Rokid Nav. */
+/** "HUD installed" after an install done with Hi Rokid on screen; tapping it returns to 885rokidOS. */
 object HudInstalledNotice {
     private const val CHANNEL = "hud_install"
     private const val ID = 72
@@ -22,7 +22,7 @@ object HudInstalledNotice {
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_directions)
             .setContentTitle("HUD installed on your glasses")
-            .setContentText("Tap to return to Rokid Nav")
+            .setContentText("Tap to return to 885rokidOS")
             .setContentIntent(open).setAutoCancel(true).build()
         runCatching { NotificationManagerCompat.from(context).notify(ID, notification) } // no-op without notification permission
     }

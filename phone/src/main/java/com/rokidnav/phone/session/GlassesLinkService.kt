@@ -25,7 +25,7 @@ class GlassesLinkService:Service() {
         val open=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val off=PendingIntent.getService(this,1,Intent(this,GlassesLinkService::class.java).setAction(DISCONNECT),PendingIntent.FLAG_IMMUTABLE)
         val notification=NotificationCompat.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-            .setContentTitle("Rokid Nav is on your glasses").setContentText("Notifications are sent to the glasses.")
+            .setContentTitle("885rokidOS is on your glasses").setContentText("Notifications are sent to the glasses.")
             .setContentIntent(open).setOngoing(true).setSilent(true).addAction(0,"Disconnect",off).build()
         if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q)startForeground(ID,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         else startForeground(ID,notification)

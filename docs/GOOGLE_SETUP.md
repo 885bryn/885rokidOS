@@ -46,7 +46,7 @@ Hi Rokid → Toolbox → Glasses app management if Hi Rokid ever reports an inst
 
 ## Validate with the phone
 
-1. Keep Hi Rokid paired to the glasses. In Rokid Nav → Glasses, authorize and connect.
+1. Keep Hi Rokid paired to the glasses. In 885rokidOS → Glasses, authorize and connect.
 2. Navigate → search destination → grant precise location → choose an alternative on the Google map.
 3. Enable **Simulate this drive** for the first test, then Go. Respond to Google's terms dialog and
    Android's notification request yourself. Simulation needs Google's API access too.

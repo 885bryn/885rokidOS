@@ -6,7 +6,7 @@
 
     <application
         android:icon="@drawable/ic_nav"
-        android:label="Rokid Nav HUD"
+        android:label="885rokidOS"
         android:theme="@style/Theme.AppCompat.NoActionBar">
 
         <!-- Name must equal phone BuildConfig.GLASSES_ACTIVITY (CXR-L glassesActivityName). -->

@@ -122,7 +122,7 @@ private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,
     LaunchedEffect(state){try{environment=link.checkEnvironment();checkError=false}catch(_:Exception){checkError=true}}
     val status=when(val s=state){LinkState.Idle->"Not authorized";LinkState.Authorizing->"Waiting for Rokid approval";LinkState.Authorized->"Authorized · ready to connect";LinkState.Connecting->"Installing and opening the glasses HUD";LinkState.UpdatingHud->"Updating the HUD on your glasses (about 30 s)";LinkState.Ready->"Glasses connected";is LinkState.Paused->"Glasses paused: ${s.reason}";is LinkState.Closed->if(s.hudClosedOnGlasses)"HUD closed on the glasses · tap Connect to show it again" else "Glasses disconnected: ${s.reason}";is LinkState.Failed->s.message}
     Column(Modifier.fillMaxSize().background(Color.Black).verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Text("Rokid Nav",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Medium)
+        Text("885rokidOS",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Medium)
         Text("Connect your glasses",style=MaterialTheme.typography.titleLarge)
         Text("Open Hi Rokid and connect your glasses, then authorize this app.",color=Color.LightGray)
         HorizontalDivider(color=Color(0xFF25382D))

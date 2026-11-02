@@ -163,7 +163,7 @@ class GoogleNavigationEngine(private val context:Context):NavigationEngine {
         val open=android.app.PendingIntent.getActivity(context,3,android.content.Intent(context,com.rokidnav.phone.ui.MainActivity::class.java),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
         val notification=androidx.core.app.NotificationCompat.Builder(context,com.rokidnav.phone.session.NavForegroundService.CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_directions).setContentTitle("Rokid navigation")
+            .setSmallIcon(android.R.drawable.ic_menu_directions).setContentTitle("885rokidOS navigation")
             .setContentText("Google guidance is running").setContentIntent(open)
             .setOngoing(true).setSilent(true).setOnlyAlertOnce(true).build()
         runCatching {NavigationApi.initForegroundServiceManagerProvider(application,GOOGLE_NOTIFICATION_ID) {notification}}

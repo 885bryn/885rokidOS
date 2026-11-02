@@ -88,6 +88,7 @@ class HudRenderer(context: Context) {
     private var mediaTitle = emptyArray<String>()
     private var mediaArtist = ""
     private val playTriangle = Path().apply { moveTo(0f,0f); lineTo(0f,24f); lineTo(21f,12f); close() }
+    private var notificationLeft = ""
     private var notificationLines = emptyArray<String>()
     private var cardLayout = -1
     private var cardLeft = 0f
@@ -257,10 +258,12 @@ class HudRenderer(context: Context) {
                 cardW=if(corner && !idle)222f else if(corner)444f else 452f
                 cardSize=if(corner && !idle)20f else 22f
                 cardStep=cardSize+6f
-                notificationApp=ellipsize(n.app.uppercase(),17f,cardW-32f)
+                notificationApp=ellipsize(n.app.uppercase(),17f,cardW-96f)
                 notificationTitle=ellipsize(n.title,26f,cardW-32f)
                 notificationLines=wrap(n.text,cardSize,cardW-32f,if(idle)6 else 4)
             }
+            val elapsed=(next.nowMs-next.notificationShownAt).coerceAtLeast(0)
+            notificationLeft=((HudStore.notificationMillis(n)-elapsed+999)/1000).coerceAtLeast(0).toString()
         }
         next.media?.let { m ->
             mediaApp=m.app.uppercase()
@@ -343,7 +346,7 @@ class HudRenderer(context: Context) {
         }
         if(s.phoneSilent) {
             text(c,"Phone not sending",18f,340f,24f)
-            text(c,"Rokid Nav → Show on glasses",18f,376f,20f,153)
+            text(c,"885rokidOS → Show on glasses",18f,376f,20f,153)
             return
         }
         when {
@@ -390,7 +393,7 @@ class HudRenderer(context: Context) {
         }
         if(s.phoneSilent) {
             text(c,"Phone not sending",18f,560f,22f)
-            text(c,"Rokid Nav → Show on glasses",18f,600f,18f,153)
+            text(c,"885rokidOS → Show on glasses",18f,600f,18f,153)
             return
         }
         // Minimal: the same corner instructions with the map turned off (third view in the tap cycle).
@@ -744,6 +747,8 @@ class HudRenderer(context: Context) {
         box(c,cardLeft,cardTop,cardLeft+cardW,cardTop+height,12f,fill=true,black=true)
         box(c,cardLeft,cardTop,cardLeft+cardW,cardTop+height,12f)
         text(c,notificationApp,cardLeft+16f,cardTop+26f,17f,179,b=true)
+        // Seconds until the card goes away.
+        right(c,notificationLeft,cardLeft+cardW-16f,cardTop+30f,26f,b=true)
         text(c,notificationTitle,cardLeft+16f,cardTop+60f,26f,b=true)
         for(i in 0 until lines)text(c,notificationLines[i],cardLeft+16f,cardTop+94f+i*cardStep,cardSize,230)
     }

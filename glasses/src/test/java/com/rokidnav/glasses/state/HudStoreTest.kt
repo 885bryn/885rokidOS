@@ -203,4 +203,21 @@ class HudStoreTest {
         assertEquals(1,sent.count {it.action==ActionType.MEDIA_PLAY_PAUSE})
         assertEquals(false,hud.state.value.media?.playing)
     }
+
+    @Test fun aVisibleNotificationRedrawsEverySecondForItsCountdown() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(1,"n1","Messages","Sam","On my way"))
+        assertEquals(1_000L,hud.state.value.nowMs)
+        now+=1_000;hud.tick()
+        assertEquals(2_000L,hud.state.value.nowMs)
+        now+=1_000;hud.tick()
+        assertEquals(3_000L,hud.state.value.nowMs)
+        // With no card (and nothing else timed) an idle HUD does not redraw.
+        now+=HudStore.NOTIFICATION_MAX_MS;hud.tick()
+        assertNull(hud.state.value.notification)
+        val quiet=hud.state.value
+        now+=1_000;hud.tick()
+        assertEquals(true,hud.state===null || hud.state.value===quiet)
+    }
 }

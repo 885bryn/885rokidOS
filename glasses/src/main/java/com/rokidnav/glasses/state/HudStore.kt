@@ -69,7 +69,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             // Position-only changes (a seek, a resync) change nothing on screen, so they do not redraw.
             is MediaState->mutable.update {s->val next=m.takeIf {it.active}
                 if(sameOnScreen(s.media,next))s else s.copy(media=next)}
-            is PhoneNotification->mutable.update {it.copy(notification=m,notificationShownAt=clock())}
+            is PhoneNotification->mutable.update {it.copy(notification=m,notificationShownAt=clock(),nowMs=clock())}
             else->Unit
         }
     }
@@ -146,7 +146,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
             // Otherwise an unchanged state is not re-emitted, so an idle HUD does not redraw every second.
-            if(s.alerts.isEmpty() && s.detour==null && n==s.copy(nowMs=now))s else n}
+            // A card on screen counts down in seconds, so it redraws every tick; otherwise nothing to redraw.
+            if(s.alerts.isEmpty() && s.detour==null && s.notification==null && n==s.copy(nowMs=now))s else n}
     }
     suspend fun tickLoop(){while(true){tick();delay(1000)}}
     companion object {

@@ -31,7 +31,7 @@
     <application
         android:icon="@drawable/ic_nav"
         android:name=".RokidNavApp"
-        android:label="Rokid Nav"
+        android:label="885rokidOS"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <meta-data

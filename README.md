@@ -1,4 +1,6 @@
-# Rokid Navigation
+# 885rokidOS
+
+*(formerly Rokid Navigation: the repository and the `com.rokidnav.*` package ids keep the old name on purpose, because changing a package id breaks the installed apps and the Rokid link.)*
 
 A Google-Maps-style navigation HUD for **Rokid Glasses**. You pick a destination and route on your
 Android phone. The phone runs Google's turn-by-turn guidance and streams compact navigation data to
