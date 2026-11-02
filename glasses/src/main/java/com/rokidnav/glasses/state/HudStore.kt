@@ -18,6 +18,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     private val dismissed=HashSet<String>()
     private val alertUpdatedAt=HashMap<String,Long>()
     private var lastMessageAt=0L
+    private var lastMediaKey:GlassesKey?=null
+    private var lastMediaKeyAt=0L
     private var arrivedAt=0L
     fun onConnection(connected:Boolean){mutable.update {it.copy(linkConnected=connected)}}
     fun onMessage(m:NavMessage) {
@@ -99,13 +101,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             // A detour offer hides the card, so its taps above win; otherwise a tap only hides the card.
             s.notification!=null && key==GlassesKey.TAP->mutable.update {it.copy(notification=null)}
             // No trip and music playing: the idle screen is the player.
-            idleMedia(s) && key==GlassesKey.TAP->{
-                sendAction(GlassesAction(0,ActionType.MEDIA_PLAY_PAUSE))
-                // Optimistic: the bar and the icon change now; the phone's answer corrects them.
-                mutable.update {it.copy(media=it.media?.copy(playing=!it.media.playing))}
-            }
-            idleMedia(s) && key==GlassesKey.SWIPE_FORWARD->sendAction(GlassesAction(0,ActionType.MEDIA_NEXT))
-            idleMedia(s) && key==GlassesKey.SWIPE_BACK->sendAction(GlassesAction(0,ActionType.MEDIA_PREVIOUS))
+            idleMedia(s) && (key==GlassesKey.TAP || key==GlassesKey.SWIPE_FORWARD || key==GlassesKey.SWIPE_BACK)->mediaKey(key)
             key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
             key==GlassesKey.SWIPE_FORWARD->{mutable.update {it.copy(mapZoom=(it.mapZoom-1).coerceAtLeast(0))};sendAction(GlassesAction(0,ActionType.ZOOM_IN))}
             key==GlassesKey.SWIPE_BACK->{mutable.update {it.copy(mapZoom=(it.mapZoom+1).coerceAtMost(2))};sendAction(GlassesAction(0,ActionType.ZOOM_OUT))}
@@ -116,6 +112,24 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     }
     private fun sameOnScreen(a:MediaState?,b:MediaState?)=if(a==null || b==null)a==b else
         a.app==b.app && a.title==b.title && a.artist==b.artist && a.playing==b.playing
+    /**
+     * One physical gesture reaches the HUD by up to three paths (system broadcast, key event, touch), so the
+     * same media key inside [MEDIA_KEY_GAP_MS] of the last accepted one is the same gesture and is dropped.
+     */
+    private fun mediaKey(key:GlassesKey) {
+        val now=clock()
+        if(key==lastMediaKey && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS)return
+        lastMediaKey=key;lastMediaKeyAt=now
+        when(key) {
+            GlassesKey.TAP->{
+                sendAction(GlassesAction(0,ActionType.MEDIA_PLAY_PAUSE))
+                // Optimistic: the icon changes now; the phone's answer corrects it.
+                mutable.update {it.copy(media=it.media?.copy(playing=!it.media.playing))}
+            }
+            GlassesKey.SWIPE_FORWARD->sendAction(GlassesAction(0,ActionType.MEDIA_NEXT))
+            else->sendAction(GlassesAction(0,ActionType.MEDIA_PREVIOUS))
+        }
+    }
     private fun idleMedia(s:HudState)=s.media!=null && s.notification==null && (s.navState==NavState.IDLE || s.navState==NavState.ENDED)
     private fun mode(value:HudMode){mutable.update {it.copy(mode=value)}}
     fun tick(now:Long=clock()) {
@@ -139,6 +153,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         const val ALERT_STALE_MS=120_000L
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L
+        /** Longer than the spread between the three input paths of one gesture, shorter than two real ones. */
+        const val MEDIA_KEY_GAP_MS=600L
         /** How long a card stays: longer text stays longer, but never past the maximum (driver safety). */
         const val NOTIFICATION_MIN_MS=6_000L
         const val NOTIFICATION_MAX_MS=15_000L

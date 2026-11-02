@@ -186,4 +186,21 @@ class HudStoreTest {
         hud.onMessage(media(4,playing=false).copy(title="Other song"))
         assertEquals("Other song",hud.state.value.media?.title)
     }
+
+    @Test fun oneGestureReportedByThreeInputPathsSendsOneMediaAction() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(media(1))
+        // Broadcast, key event and touch for one swipe, within a few ms of each other.
+        hud.onKey(GlassesKey.SWIPE_FORWARD);now+=15;hud.onKey(GlassesKey.SWIPE_FORWARD);now+=40;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(listOf(ActionType.MEDIA_NEXT),sent.map {it.action})
+        // A second, deliberate swipe later skips again; another key is never held back by it.
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(listOf(ActionType.MEDIA_NEXT,ActionType.MEDIA_NEXT,ActionType.MEDIA_PREVIOUS),sent.map {it.action})
+        // Tap is debounced the same way, so a doubled tap cannot pause and resume at once.
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.TAP)
+        assertEquals(1,sent.count {it.action==ActionType.MEDIA_PLAY_PAUSE})
+        assertEquals(false,hud.state.value.media?.playing)
+    }
 }

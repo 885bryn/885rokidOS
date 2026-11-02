@@ -28,6 +28,7 @@ class MediaMonitor(private val context: Context) : MediaSource {
     private val component by lazy { ComponentName(context, PhoneNotificationListener::class.java) }
     private var started = false
     private var controller: MediaController? = null
+    private var lastPlaying: Boolean? = null
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { choose(it.orEmpty()) }
     private val callback = object : MediaController.Callback() {
@@ -71,6 +72,7 @@ class MediaMonitor(private val context: Context) : MediaSource {
             return
         }
         val playing = state.state == PlaybackState.STATE_PLAYING || state.state == PlaybackState.STATE_BUFFERING
+        if (playing != lastPlaying) { lastPlaying = playing; Log.i(TAG, "playing=$playing pkg=${c.packageName} state=${state.state}") }
         val position = if (state.state == PlaybackState.STATE_PLAYING)
             state.position + ((SystemClock.elapsedRealtime() - state.lastPositionUpdateTime) * state.playbackSpeed).toLong()
         else state.position
@@ -91,10 +93,11 @@ class MediaMonitor(private val context: Context) : MediaSource {
 
     override fun playPause() {
         val c = controller ?: return
+        Log.i(TAG, "action play_pause")
         if (c.playbackState?.state == PlaybackState.STATE_PLAYING) c.transportControls.pause() else c.transportControls.play()
     }
-    override fun next() { controller?.transportControls?.skipToNext() }
-    override fun previous() { controller?.transportControls?.skipToPrevious() }
+    override fun next() { Log.i(TAG, "action next"); controller?.transportControls?.skipToNext() }
+    override fun previous() { Log.i(TAG, "action previous"); controller?.transportControls?.skipToPrevious() }
 
     private companion object { const val TAG = "RokidNavMedia" }
 }
