@@ -35,6 +35,7 @@ class HudStoreTest {
     }
 
     @Test fun tapCyclesCornerMapBigMapAndInstructionsOnlyWhenNoDetour() {
+        store.onMessage(com.rokidnav.protocol.NavStateUpdate(1,com.rokidnav.protocol.NavState.ACTIVE))
         store.onKey(GlassesKey.TAP)
         assertEquals(HudMode.Map, store.state.value.mode)
         store.onKey(GlassesKey.TAP)
@@ -137,6 +138,24 @@ class HudStoreTest {
         assertNull(hud.state.value.notification)
     }
 
+    @Test fun doubleTapClosesACardAndDoesNotLeaveTheApp() {
+        val hud=HudStore {sent+=it}
+        hud.onMessage(replyCard())
+        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))
+        assertNull(hud.state.value.notification)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        // With the card gone, the next double tap leaves to the Rokid menu as before.
+        assertEquals(false,hud.onKey(GlassesKey.DOUBLE_TAP))
+    }
+
+    @Test fun withoutATripTapAndSwipeNeverChangeTheHiddenMapViewOrZoom() {
+        val hud=HudStore {sent+=it}
+        hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD);hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(HudMode.Compact,hud.state.value.mode)
+        assertEquals(1,hud.state.value.mapZoom)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+    }
+
     @Test fun longerNotificationsStayLongerUpToTheMaximum() {
         val short=com.rokidnav.protocol.PhoneNotification(1,"a","App","Sam","On my way")
         val long=short.copy(text="x".repeat(120))
@@ -162,9 +181,8 @@ class HudStoreTest {
 
     @Test fun mediaKeysDoNothingOnATripOrWithoutMusic() {
         val hud=HudStore {sent+=it}
-        hud.onKey(GlassesKey.SWIPE_FORWARD)
         hud.onMessage(media(1));hud.onMessage(com.rokidnav.protocol.NavStateUpdate(2,com.rokidnav.protocol.NavState.ACTIVE))
-        hud.onKey(GlassesKey.TAP)
+        hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(listOf(ActionType.ZOOM_IN),sent.map {it.action})
         assertEquals(HudMode.Map,hud.state.value.mode)
         hud.onMessage(com.rokidnav.protocol.MediaState(3,active=false))

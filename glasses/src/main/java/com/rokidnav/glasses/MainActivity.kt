@@ -34,7 +34,7 @@ class MainActivity:AppCompatActivity() {
         // Demo only when asked for explicitly (phone "Preview on this phone", captures). Opening from the
         // Rokid home screen used to start the demo trip, which looked like a different navigation.
         vm.initialize(intent.getBooleanExtra("demo",false))
-        if(BuildConfig.DEBUG && intent.getBooleanExtra("demo",false) && intent.getBooleanExtra("previewExpanded",false))vm.onKey(GlassesKey.TAP)
+        if(BuildConfig.DEBUG && intent.getBooleanExtra("demo",false) && intent.getBooleanExtra("previewExpanded",false))vm.store.previewMode(com.rokidnav.glasses.state.HudMode.Map)
         hud=HudView(this)
         val container=FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
         val previewWidth=if(BuildConfig.DEBUG)intent.getIntExtra("previewWidth",0) else 0

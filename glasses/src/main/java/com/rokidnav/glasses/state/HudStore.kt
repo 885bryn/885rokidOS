@@ -97,13 +97,16 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     }
     /**
      * Applies a key. Returns false when the HUD has no use for it, so the caller hands it to the system:
-     * double-tap / Back then exits to the Rokid home screen. Double-tap is only kept where it has a job:
-     * keep the current route on a detour offer, close the arrival screen. The HUD has no menu
-     * (removed 2026-10-20: the glasses deliver no spare gesture for it); trip and settings live on the phone.
+     * double-tap / Back then exits to the Rokid home screen. Double-tap is "back one step" wherever there is a
+     * step to go back from: keep the current route on a detour offer, close a card, cancel a voice reply, close
+     * the arrival screen. The HUD has no menu (removed 2026-10-20: the glasses deliver no spare gesture for it);
+     * trip and settings live on the phone. Map view and zoom belong to a trip, so without one tap and swipe
+     * never change them unseen.
      */
     fun onKey(key:GlassesKey):Boolean {
         val s=state.value
         val d=s.detour
+        val back=key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK
         when {
             d!=null && (key==GlassesKey.TAP || key==GlassesKey.DOUBLE_TAP)->{
                 sendAction(GlassesAction(0,if(key==GlassesKey.TAP)ActionType.ACCEPT_DETOUR else ActionType.DISMISS_DETOUR,d.offerId))
@@ -117,7 +120,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 sendAction(GlassesAction(0,ActionType.VOICE_START,id))
                 mutable.update {it.copy(voice=VoiceState(0,VoicePhase.STARTING,id),voiceAt=clock())}
             }
-            s.notification!=null && key==GlassesKey.TAP->mutable.update {it.copy(notification=null)}
+            // Tap or double tap closes a card; the double tap does not also leave the app.
+            s.notification!=null && (key==GlassesKey.TAP || back)->mutable.update {it.copy(notification=null)}
             // No trip and music playing: the idle screen is the player.
             // The first touch only brings the player up (it must be seen before it is controlled); the same gesture
             // arriving again by another input path is dropped by the media key guard.
@@ -126,6 +130,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 mutable.update {it.copy(mediaShown=true,mediaShownAt=clock())}
             }
             idleMedia(s) && (key==GlassesKey.TAP || key==GlassesKey.SWIPE_FORWARD || key==GlassesKey.SWIPE_BACK)->mediaKey(key)
+            // No trip, nothing on screen: tap and swipe have nothing to act on.
+            idle(s) && !back->Unit
             key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
             key==GlassesKey.SWIPE_FORWARD->{mutable.update {it.copy(mapZoom=(it.mapZoom-1).coerceAtLeast(0))};sendAction(GlassesAction(0,ActionType.ZOOM_IN))}
             key==GlassesKey.SWIPE_BACK->{mutable.update {it.copy(mapZoom=(it.mapZoom+1).coerceAtMost(2))};sendAction(GlassesAction(0,ActionType.ZOOM_OUT))}
@@ -185,8 +191,11 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             VoicePhase.IDLE->Unit
         }
     }
-    private fun idleMedia(s:HudState)=s.media!=null && s.notification==null && (s.navState==NavState.IDLE || s.navState==NavState.ENDED)
+    private fun idle(s:HudState)=s.navState==NavState.IDLE || s.navState==NavState.ENDED
+    private fun idleMedia(s:HudState)=s.media!=null && s.notification==null && idle(s)
     private fun mode(value:HudMode){mutable.update {it.copy(mode=value)}}
+    /** Debug previews only: pick the view before the demo trip starts (a tap no longer does that without a trip). */
+    fun previewMode(value:HudMode)=mode(value)
     fun tick(now:Long=clock()) {
         if(routePendingAt>0 && now-routePendingAt>=5000){routePendingAt=0;requestResync()}
         // The phone refreshes active alerts with every position fix; a silent one is stale (link drop).
