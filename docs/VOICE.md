@@ -45,7 +45,7 @@ recording "hello this is the test" came back exactly.
 2. **Tap** starts it (`VOICE_START`). The phone opens the glasses microphone and `VoiceReplyController` feeds the audio to
    `SherpaSpeech`; the words so far go to the glasses (`VoiceState LISTENING`). It stops when you pause for 1.4 s,
    when you tap (`VOICE_STOP`), or after 15 s.
-3. **Check screen** (`REVIEW`): the text as typed (`Dictation.format`) and three rows. **Swipe** moves, **tap** acts:
+3. **Check screen** (`REVIEW`): the text in the user's style (`Dictation.format`: capital first letter and "I", no punctuation) and three rows. **Swipe** moves, **tap** acts:
    Send (`VOICE_SEND`: `NotificationReplier.reply` fills the app's reply box and fires it), Redo (listen again), Cancel.
    **Double tap** cancels at any step and is consumed by the HUD, so it does not leave to the Rokid menu.
 4. `SENT` or `FAILED` shows for 2 s, then the card closes. Nothing is sent without the Send tap.

@@ -85,13 +85,21 @@ class RokidNavApp : Application() {
         }}
     }
 
-    /** Writes each audio chunk of the current reply to [file]; the file starts over when a new reply starts (gap > 2 s). */
+    /**
+     * Debug builds keep the audio of the last 20 spoken replies (voice-replies/reply-<time>.pcm in the app's private folder) so a
+     * misheard reply can be studied offline. A new reply starts a new file when audio has paused for 2 s.
+     */
     private fun lastVoiceRecorder(file:java.io.File):(ByteArray)->Unit {
+        val dir=java.io.File(file.parentFile,"voice-replies").apply {mkdirs()}
         var lastAt=0L
         var out:java.io.OutputStream?=null
         return {chunk->
             val now=System.currentTimeMillis()
-            if(out==null || now-lastAt>2_000){runCatching {out?.close()};out=file.outputStream()}
+            if(out==null || now-lastAt>2_000){
+                runCatching {out?.close()}
+                out=java.io.File(dir,"reply-$now.pcm").outputStream()
+                dir.listFiles()?.sortedBy {it.name}?.dropLast(20)?.forEach {it.delete()}
+            }
             lastAt=now
             runCatching {out?.write(chunk)}
         }

@@ -39,6 +39,32 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
         transcribe(file, say)
     }
 
+    /**
+     * Debug: ten typical short replies. The screen shows each phrase, the glasses microphone records [secondsEach] s, and the audio
+     * is saved to files/accuracy/NN.pcm with the phrase in files/accuracy/phrases.txt, so models can be compared offline.
+     */
+    suspend fun recordAccuracySet(secondsEach: Int, say: (String) -> Unit) {
+        if (link.state.value != LinkState.Ready) { say("Glasses are not connected."); return }
+        val dir = File(context.filesDir, "accuracy").apply { deleteRecursively(); mkdirs() }
+        File(dir, "phrases.txt").writeText(ACCURACY_PHRASES.mapIndexed { i, p -> "%02d\t%s".format(i, p) }.joinToString("\n"))
+        for ((i, phrase) in ACCURACY_PHRASES.withIndex()) {
+            say("${i + 1}/${ACCURACY_PHRASES.size}  Say: \"$phrase\"")
+            val file = File(dir, "%02d.pcm".format(i))
+            file.outputStream().use { out ->
+                coroutineScope {
+                    val reader = launch(Dispatchers.IO) { link.audio.collect { out.write(it) } }
+                    if (!link.startAudio()) { say("The glasses refused the microphone."); reader.cancel(); return@coroutineScope }
+                    delay(secondsEach * 1000L)
+                    link.stopAudio()
+                    delay(400)
+                    reader.cancel()
+                }
+            }
+            delay(600)
+        }
+        say("Done: ${ACCURACY_PHRASES.size} phrases saved. Tell Claude.")
+    }
+
     /** Debug: transcribe the saved recording again (adb am broadcast to VoiceReplayReceiver). */
     suspend fun replay(say: (String) -> Unit) {
         val file = File(context.filesDir, "voice-spike.pcm")
@@ -82,5 +108,12 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
         return peak to (if (n == 0) 0 else kotlin.math.sqrt(sum / n).toInt())
     }
 
-    private companion object { const val TAG = "RokidNavVoice" }
+    private companion object {
+        const val TAG = "RokidNavVoice"
+        val ACCURACY_PHRASES = listOf(
+            "good to know", "on my way", "I will call you later", "can we talk tomorrow", "sounds good see you there",
+            "no problem thanks", "I am running about ten minutes late", "yes that works for me", "let me check and get back to you",
+            "love you too",
+        )
+    }
 }

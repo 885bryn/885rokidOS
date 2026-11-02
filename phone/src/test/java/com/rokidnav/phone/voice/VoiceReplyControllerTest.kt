@@ -67,11 +67,11 @@ class VoiceReplyControllerTest {
         r.link.audio.tryEmit("friend".toByteArray()); runCurrent()
         val review = r.reports.last()
         assertEquals(VoicePhase.REVIEW, review.phase)
-        assertEquals("Hello there friend.", review.text)
+        assertEquals("Hello there friend", review.text)
         assertTrue("nothing is sent before the user confirms", r.sent.isEmpty())
         assertEquals("the microphone stream is closed after listening", 1, r.link.stopped)
         r.controller.send("n1"); runCurrent()
-        assertEquals(listOf("n1" to "Hello there friend."), r.sent)
+        assertEquals(listOf("n1" to "Hello there friend"), r.sent)
         assertEquals(VoicePhase.SENT, r.reports.last().phase)
     }
 
@@ -81,7 +81,7 @@ class VoiceReplyControllerTest {
         r.link.audio.tryEmit("hi".toByteArray()); runCurrent()
         r.controller.stop(); advanceTimeBy(200); runCurrent()
         assertEquals(VoicePhase.REVIEW, r.reports.last().phase)
-        assertEquals("Hi.", r.reports.last().text)
+        assertEquals("Hi", r.reports.last().text)
     }
 
     @Test fun cancelClearsTheScreenAndNothingIsSent() = runTest {
@@ -164,7 +164,7 @@ class VoiceReplyControllerTest {
         controller.stop()
         val end = System.currentTimeMillis() + 3_000
         while (reports.none { it.phase == VoicePhase.REVIEW } && System.currentTimeMillis() < end) Thread.sleep(10)
-        assertEquals("But you like it.", reports.last { it.phase == VoicePhase.REVIEW }.text)
+        assertEquals("But you like it", reports.last { it.phase == VoicePhase.REVIEW }.text)
         scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
     }
 }
