@@ -3,16 +3,21 @@ package com.rokidnav.phone.voice
 import com.rokidnav.phone.glasses.GlassesLink
 import com.rokidnav.protocol.VoicePhase
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** Speech to text for one spoken reply. [SherpaSpeech] is the real one; tests use a fake. */
 interface Transcriber {
-    /** Null when the speech model is not on the phone. */
+    /** Null when the speech model is not on the phone. Slow (loads the model): call it off the main thread. */
     fun begin(): Transcription?
 }
 
@@ -28,32 +33,33 @@ interface Transcription : AutoCloseable {
 fun interface ReplySender { fun reply(notificationId: String, text: String): Boolean }
 
 /**
- * One voice reply at a time: listen to the glasses' microphone, show the words as they come, stop when the speaker
- * pauses (or taps, or after [MAX_LISTEN_MS]), let the user confirm, then send. Every step is reported with
- * [report]. Nothing is sent without [send]. Message text is never logged here.
+ * One voice reply at a time: open the glasses microphone at once, load the speech model in parallel (audio is held until it
+ * is ready, so nothing said right after the tap is lost), show the words as they come, stop when the speaker pauses (or
+ * taps, or after [MAX_LISTEN_MS]), let the user confirm, then send. Every step is reported with [report], which may be
+ * called from [work]. Nothing is sent without [send]. Message text is never logged here.
  */
 class VoiceReplyController(
     private val scope: CoroutineScope,
     private val link: GlassesLink,
     private val transcriber: Transcriber,
     private val sender: ReplySender,
+    /** Where the heavy work runs; the real app uses Dispatchers.Default so the main thread stays free. */
+    private val work: CoroutineContext = EmptyCoroutineContext,
+    /** Debug aid: every microphone chunk, to keep the last recording for analysis. */
+    private val onAudio: ((ByteArray) -> Unit)? = null,
     private val report: (VoicePhase, String, String) -> Unit,
 ) {
     private var job: Job? = null
-    private var stopNow = false
-    private var activeId = ""
-    private var reviewed = ""
+    @Volatile private var stopNow = false
+    @Volatile private var activeId = ""
+    @Volatile private var reviewed = ""
 
     fun start(notificationId: String) {
         cancelJob()
         activeId = notificationId
         stopNow = false
         reviewed = ""
-        job = scope.launch {
-            val speech = transcriber.begin()
-            if (speech == null) { report(VoicePhase.FAILED, notificationId, "Speech model missing"); return@launch }
-            speech.use { listen(notificationId, it) }
-        }
+        job = scope.launch(work) { listen(notificationId) }
     }
 
     /** The user tapped to stop listening early. */
@@ -74,39 +80,68 @@ class VoiceReplyController(
 
     private fun cancelJob() { job?.cancel(); job = null }
 
-    private suspend fun listen(id: String, speech: Transcription) {
-        if (!link.startAudio()) { report(VoicePhase.FAILED, id, "Glasses microphone not available"); return }
-        report(VoicePhase.LISTENING, id, "")
+    private suspend fun listen(id: String) = coroutineScope {
+        // The model loads while the microphone already runs.
+        val loading: Deferred<Transcription?> = async { transcriber.begin() }
+        if (!link.startAudio()) {
+            report(VoicePhase.FAILED, id, "Glasses microphone not available")
+            loading.cancel(); loading.invokeOnCompletion { runCatching { loading.getCompleted()?.close() } }
+            return@coroutineScope
+        }
+        var speech: Transcription? = null
         var words = ""
         var lastSent = ""
+        var live = false
+        val held = ArrayDeque<ByteArray>()
+        val audioEnded = CompletableDeferred<Unit>()
         try {
             withTimeoutOrNull(MAX_LISTEN_MS) {
-                // Collect until the speaker finishes: a pause after speech, or a tap on the glasses.
-                kotlinx.coroutines.coroutineScope {
+                coroutineScope {
                     val collector = launch {
                         link.audio.collect { chunk ->
-                            words = speech.accept(chunk)
+                            onAudio?.invoke(chunk)
+                            if (!live) { live = true; report(VoicePhase.LISTENING, id, "") }
+                            if (speech == null) {
+                                if (!loading.isCompleted) { held.addLast(chunk); return@collect }
+                                speech = loading.await()
+                                if (speech == null) throw ModelMissing()
+                            }
+                            val engine = speech!!
+                            while (held.isNotEmpty()) words = engine.accept(held.removeFirst())
+                            words = engine.accept(chunk)
                             if (words != lastSent) { lastSent = words; report(VoicePhase.LISTENING, id, words) }
-                            if (speech.endpoint()) throw EndOfSpeech()
+                            if (engine.endpoint()) throw EndOfSpeech()
                         }
                     }
                     val watcher = launch { while (!stopNow) delay(50); throw EndOfSpeech() }
-                    try { collector.join() } finally { watcher.cancel() }
+                    // No model on the phone: say so now, not when the first audio arrives.
+                    val modelCheck = launch { if (loading.await() == null) { report(VoicePhase.FAILED, id, "Speech model missing"); throw ModelMissing() } }
+                    try { collector.join() } finally { watcher.cancel(); modelCheck.cancel() }
                 }
             }
         } catch (_: EndOfSpeech) {
-        } catch (e: CancellationException) {
-            throw e
-        } finally {
+        } catch (_: ModelMissing) {
             link.stopAudio()
+            return@coroutineScope
+        } catch (e: CancellationException) {
+            link.stopAudio(); runCatching { loading.cancel() }
+            throw e
         }
-        val finalText = speech.finish().ifBlank { words }
-        if (finalText.isBlank()) { report(VoicePhase.FAILED, id, "Heard nothing"); return }
-        reviewed = finalText
-        report(VoicePhase.REVIEW, id, Dictation.format(finalText))
+        link.stopAudio()
+        audioEnded.complete(Unit)
+        val engine = speech ?: runCatching { loading.await() }.getOrNull()
+        if (engine == null) { if (words.isBlank()) report(VoicePhase.FAILED, id, "Speech model missing"); return@coroutineScope }
+        engine.use {
+            while (held.isNotEmpty()) words = it.accept(held.removeFirst())
+            val finalText = it.finish().ifBlank { words }
+            if (finalText.isBlank()) { report(VoicePhase.FAILED, id, "Heard nothing"); return@use }
+            reviewed = finalText
+            report(VoicePhase.REVIEW, id, Dictation.format(finalText))
+        }
     }
 
     private class EndOfSpeech : RuntimeException()
+    private class ModelMissing : RuntimeException()
 
     companion object { const val MAX_LISTEN_MS = 15_000L }
 }

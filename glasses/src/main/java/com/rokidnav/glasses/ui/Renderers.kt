@@ -269,7 +269,7 @@ class HudRenderer(context: Context) {
             next.voice?.let { v ->
                 if(v!==old.voice || n!==old.notification) {
                     voiceHeader=ellipsize("REPLY TO "+n.title.uppercase(),17f,cardW-130f)
-                    val shown=when(v.phase) { VoicePhase.SENT->"Sent"; VoicePhase.LISTENING->v.text.ifBlank{"Speak now…"}; else->v.text }
+                    val shown=when(v.phase) { VoicePhase.SENT->"Sent"; VoicePhase.STARTING->"Starting…"; VoicePhase.LISTENING->v.text.ifBlank{"Speak now…"}; else->v.text }
                     voiceLines=wrap(shown,VOICE_SIZE,cardW-32f,4)
                 }
             }
@@ -773,17 +773,17 @@ class HudRenderer(context: Context) {
         val review=v.phase==VoicePhase.REVIEW
         val lines=voiceLines.size.coerceAtLeast(1)
         val textEnd=70f+(lines-1)*VOICE_STEP+14f
-        val height=when(v.phase) { VoicePhase.REVIEW->textEnd+3*VOICE_ROW+8f; VoicePhase.LISTENING->textEnd+30f; else->textEnd+6f }
+        val height=when(v.phase) { VoicePhase.REVIEW->textEnd+3*VOICE_ROW+8f; VoicePhase.LISTENING,VoicePhase.STARTING->textEnd+30f; else->textEnd+6f }
         val limit=if((cardLayout and 2)!=0)620f else 384f
         val top=minOf(cardTop,limit-height).coerceAtLeast(8f)
         box(c,cardLeft,top,cardLeft+cardW,top+height,12f,fill=true,black=true)
         box(c,cardLeft,top,cardLeft+cardW,top+height,12f)
         text(c,voiceHeader,cardLeft+16f,top+26f,17f,179,b=true)
-        val status=when(v.phase) { VoicePhase.LISTENING->"LISTENING"; VoicePhase.REVIEW->"CHECK"; VoicePhase.SENT->"DONE"; else->"" }
+        val status=when(v.phase) { VoicePhase.STARTING->"STARTING"; VoicePhase.LISTENING->"LISTENING"; VoicePhase.REVIEW->"CHECK"; VoicePhase.SENT->"DONE"; else->"" }
         right(c,status,cardLeft+cardW-16f,top+26f,17f,179,b=true)
-        val dim=if(v.phase==VoicePhase.LISTENING && v.text.isBlank())153 else 245
+        val dim=if((v.phase==VoicePhase.LISTENING && v.text.isBlank()) || v.phase==VoicePhase.STARTING)153 else 245
         for(i in voiceLines.indices)text(c,voiceLines[i],cardLeft+16f,top+70f+i*VOICE_STEP,VOICE_SIZE,dim,b=v.phase==VoicePhase.SENT)
-        if(v.phase==VoicePhase.LISTENING)text(c,"TAP  done  ·  2× TAP  cancel",cardLeft+16f,top+height-12f,18f,191,b=true)
+        if(v.phase==VoicePhase.LISTENING || v.phase==VoicePhase.STARTING)text(c,if(v.phase==VoicePhase.STARTING)"2× TAP  cancel" else "TAP  done  ·  2× TAP  cancel",cardLeft+16f,top+height-12f,18f,191,b=true)
         if(review) {
             val labels=VOICE_ROWS
             for(i in labels.indices) {

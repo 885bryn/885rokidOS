@@ -115,7 +115,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             s.replyAvailable && key==GlassesKey.TAP->{
                 val id=s.notification!!.id
                 sendAction(GlassesAction(0,ActionType.VOICE_START,id))
-                mutable.update {it.copy(voice=VoiceState(0,VoicePhase.LISTENING,id),voiceAt=clock())}
+                mutable.update {it.copy(voice=VoiceState(0,VoicePhase.STARTING,id),voiceAt=clock())}
             }
             s.notification!=null && key==GlassesKey.TAP->mutable.update {it.copy(notification=null)}
             // No trip and music playing: the idle screen is the player.
@@ -165,6 +165,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         if(key==lastMediaKey && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS)return
         lastMediaKey=key;lastMediaKeyAt=now
         when(v.phase) {
+            VoicePhase.STARTING->if(key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK)cancel()
             VoicePhase.LISTENING->when(key) {
                 GlassesKey.TAP->sendAction(GlassesAction(0,ActionType.VOICE_STOP,id))
                 GlassesKey.DOUBLE_TAP,GlassesKey.BACK->cancel()
@@ -175,7 +176,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 GlassesKey.SWIPE_BACK->mutable.update {it.copy(voiceFocus=(it.voiceFocus+2)%3)}
                 GlassesKey.TAP->when(s.voiceFocus) {
                     0->sendAction(GlassesAction(0,ActionType.VOICE_SEND,id))
-                    1->{sendAction(GlassesAction(0,ActionType.VOICE_REDO,id));mutable.update {it.copy(voice=VoiceState(0,VoicePhase.LISTENING,id),voiceFocus=0)}}
+                    1->{sendAction(GlassesAction(0,ActionType.VOICE_REDO,id));mutable.update {it.copy(voice=VoiceState(0,VoicePhase.STARTING,id),voiceFocus=0)}}
                     else->cancel()
                 }
                 GlassesKey.DOUBLE_TAP,GlassesKey.BACK->cancel()

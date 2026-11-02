@@ -32,9 +32,9 @@ class SherpaSpeech(modelDir: File) : AutoCloseable {
                 numThreads = 2,
                 modelType = "nemo_transducer",
             ),
-            // Sentence end: 1.4 s of quiet after speech, or 12 s in all.
+            // Sentence end: 1.4 s of quiet after speech, 5 s of nothing at the start, or 12 s in all.
             endpointConfig = EndpointConfig(
-                rule1 = EndpointRule(false, 3.0f, 0.0f),
+                rule1 = EndpointRule(false, 5.0f, 0.0f),
                 rule2 = EndpointRule(true, 1.4f, 0.0f),
                 rule3 = EndpointRule(false, 0.0f, 12.0f),
             ),

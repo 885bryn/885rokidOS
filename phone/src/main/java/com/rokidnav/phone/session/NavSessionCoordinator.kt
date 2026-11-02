@@ -18,6 +18,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val media:com.rokidnav.phone.media.MediaSource?=null,
     transcriber:com.rokidnav.phone.voice.Transcriber?=null,
     replySender:com.rokidnav.phone.voice.ReplySender?=null,
+    voiceWork:kotlin.coroutines.CoroutineContext=kotlin.coroutines.EmptyCoroutineContext,
+    voiceAudio:((ByteArray)->Unit)?=null,
     // The glasses HUD outlives the phone app and drops any message numbered at or below the last it saw, so a
     // restarted phone must count higher than before: start from the clock (a restart is always later).
     seqStart:Long=System.currentTimeMillis()) {
@@ -31,8 +33,10 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val offer=MutableStateFlow<DetourOffer?>(null)
     val detour=offer.asStateFlow()
     private var preferences=UserSettings()
-    private val voice=if(transcriber!=null && replySender!=null)com.rokidnav.phone.voice.VoiceReplyController(scope,link,transcriber,replySender) {phase,id,text->
-        link.send(VoiceState(seq.next(),phase,id,text))
+    // Heavy speech work runs off the main thread; each step hops back to it, in order, before it is sent.
+    private val voice=if(transcriber!=null && replySender!=null)com.rokidnav.phone.voice.VoiceReplyController(scope,link,transcriber,replySender,work=voiceWork,onAudio=voiceAudio) {phase,id,text->
+        val message=VoiceState(seq.next(),phase,id,text)
+        scope.launch {link.send(message)}
     } else null
     private var lastMedia:MediaState?=null
     private var lastMediaAt=0L

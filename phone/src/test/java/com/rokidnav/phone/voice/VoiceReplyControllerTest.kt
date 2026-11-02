@@ -58,8 +58,10 @@ class VoiceReplyControllerTest {
     @Test fun listensShowsWordsAsTheyComeStopsOnAPauseThenSendsOnlyAfterConfirmation() = runTest {
         val r = rig(FakeTranscriber(endAfter = 3))
         r.controller.start("n1"); runCurrent()
-        assertEquals(VoicePhase.LISTENING, r.reports.first().phase)
+        assertEquals("the microphone opens at once", 1, r.link.started)
+        assertTrue("LISTENING waits for the first audio", r.reports.isEmpty())
         r.link.audio.tryEmit("hello".toByteArray()); runCurrent()
+        assertEquals(VoicePhase.LISTENING, r.reports.first().phase)
         r.link.audio.tryEmit("there".toByteArray()); runCurrent()
         assertEquals("hello there", r.reports.last().text)
         r.link.audio.tryEmit("friend".toByteArray()); runCurrent()
@@ -122,5 +124,47 @@ class VoiceReplyControllerTest {
         r.link.audio.tryEmit("hi".toByteArray()); runCurrent()
         advanceTimeBy(VoiceReplyController.MAX_LISTEN_MS + 100); runCurrent()
         assertEquals(VoicePhase.REVIEW, r.reports.last().phase)
+    }
+
+    /** The model is not ready for the first chunks (as with the real 2 s load): they are held, not lost. */
+    private class SlowTranscriber(val readyAfterChunks: Int) : Transcriber {
+        val ready = java.util.concurrent.atomic.AtomicBoolean(false)
+        override fun begin(): Transcription? {
+            while (!ready.get()) Thread.sleep(1)
+            return object : Transcription {
+                private val words = mutableListOf<String>()
+                override fun accept(pcm16: ByteArray): String { words += String(pcm16); return words.joinToString(" ") }
+                override fun endpoint() = false
+                override fun finish() = words.joinToString(" ")
+                override fun close() {}
+            }
+        }
+    }
+
+    @Test fun wordsSpokenWhileTheModelLoadsAreHeldAndNotLost() {
+        // Real threads here: the model load blocks, as it does on the phone.
+        val link = FakeLink()
+        val reports = java.util.concurrent.CopyOnWriteArrayList<Report>()
+        val slow = SlowTranscriber(2)
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+        val controller = VoiceReplyController(scope, link, slow, { _, _ -> true }, work = kotlinx.coroutines.Dispatchers.Default) { p, i, t -> reports += Report(p, i, t) }
+        controller.start("n1")
+        // The microphone opens at once, before the model is ready.
+        val deadline = System.currentTimeMillis() + 3_000
+        while (link.started == 0 && System.currentTimeMillis() < deadline) Thread.sleep(5)
+        assertEquals(1, link.started)
+        Thread.sleep(100)
+        link.audio.tryEmit("but".toByteArray()); link.audio.tryEmit("you".toByteArray())
+        Thread.sleep(100)
+        assertTrue("LISTENING shows as soon as audio flows", reports.any { it.phase == VoicePhase.LISTENING })
+        slow.ready.set(true)
+        Thread.sleep(300)
+        link.audio.tryEmit("like".toByteArray()); link.audio.tryEmit("it".toByteArray())
+        Thread.sleep(200)
+        controller.stop()
+        val end = System.currentTimeMillis() + 3_000
+        while (reports.none { it.phase == VoicePhase.REVIEW } && System.currentTimeMillis() < end) Thread.sleep(10)
+        assertEquals("But you like it.", reports.last { it.phase == VoicePhase.REVIEW }.text)
+        scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
     }
 }

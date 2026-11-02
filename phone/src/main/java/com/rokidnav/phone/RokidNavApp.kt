@@ -74,12 +74,27 @@ class RokidNavApp : Application() {
             media = media,
             transcriber = com.rokidnav.phone.voice.SherpaTranscriber(this),
             replySender = com.rokidnav.phone.voice.ReplySender {id,text->replies.reply(id,text)},
+            voiceWork = Dispatchers.Default,
+            // Debug builds keep the last spoken reply's audio on the phone (private folder) to diagnose recognition.
+            voiceAudio = if(BuildConfig.DEBUG)lastVoiceRecorder(java.io.File(filesDir,"voice-last.pcm")) else null,
         )
         coordinator.start()
         media.start()
         appScope.launch {glassesLink.state.map(GlassesLinkService::wanted).distinctUntilChanged().collect {
             GlassesLinkService.sync(this@RokidNavApp,glassesLink.state.value)
         }}
+    }
+
+    /** Writes each audio chunk of the current reply to [file]; the file starts over when a new reply starts (gap > 2 s). */
+    private fun lastVoiceRecorder(file:java.io.File):(ByteArray)->Unit {
+        var lastAt=0L
+        var out:java.io.OutputStream?=null
+        return {chunk->
+            val now=System.currentTimeMillis()
+            if(out==null || now-lastAt>2_000){runCatching {out?.close()};out=file.outputStream()}
+            lastAt=now
+            runCatching {out?.write(chunk)}
+        }
     }
 
     companion object {

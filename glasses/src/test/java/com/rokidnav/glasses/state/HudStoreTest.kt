@@ -283,7 +283,7 @@ class HudStoreTest {
         hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
         assertEquals("n2",sent.single().targetId)
-        assertEquals(com.rokidnav.protocol.VoicePhase.LISTENING,hud.state.value.voice?.phase)
+        assertEquals(com.rokidnav.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
         // A trip makes cards glances: no reply, the tap only closes it.
         val trip=HudStore({now}) {sent+=it}
         trip.onMessage(com.rokidnav.protocol.NavStateUpdate(1,com.rokidnav.protocol.NavState.ACTIVE))
@@ -306,7 +306,7 @@ class HudStoreTest {
         assertEquals(1,hud.state.value.voiceFocus)
         now+=1_000;hud.onKey(GlassesKey.TAP)
         assertEquals(ActionType.VOICE_REDO,sent.last().action)
-        assertEquals(com.rokidnav.protocol.VoicePhase.LISTENING,hud.state.value.voice?.phase)
+        assertEquals(com.rokidnav.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
         // Back in review, swipe back wraps to Cancel; tap cancels and closes the card.
         hud.onMessage(com.rokidnav.protocol.VoiceState(cardSeq++,com.rokidnav.protocol.VoicePhase.REVIEW,"n1","Again."))
         now+=1_000;hud.onKey(GlassesKey.SWIPE_BACK)
@@ -321,6 +321,10 @@ class HudStoreTest {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onMessage(replyCard());hud.onKey(GlassesKey.TAP);sent.clear()
+        // Until the microphone is live a tap does nothing; then it stops listening.
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        hud.onMessage(com.rokidnav.protocol.VoiceState(cardSeq++,com.rokidnav.protocol.VoicePhase.LISTENING,"n1"))
         now+=1_000;hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.VOICE_STOP),sent.map {it.action})
         now+=1_000

@@ -254,7 +254,8 @@ data class ResyncRequest(override val seq: Long, val reason: String = "") : NavM
     POLICE, SPEED_CAMERA, ACCIDENT, HAZARD, ROAD_CLOSED, CONSTRUCTION, TRAFFIC_JAM, WEATHER, OTHER
 }
 
-@Serializable enum class VoicePhase { IDLE, LISTENING, REVIEW, SENT, FAILED }
+/** STARTING = tapped, the microphone is not live yet (glasses show it at once); LISTENING = speak now. */
+@Serializable enum class VoicePhase { IDLE, STARTING, LISTENING, REVIEW, SENT, FAILED }
 
 @Serializable enum class NavState { IDLE, ROUTING, ACTIVE, REROUTING, GPS_LOST, ARRIVED, ENDED }
 
