@@ -98,7 +98,9 @@ uses the same blocks lower on the 480×640 view.
 
 **Idle screen (no trip).** Black (transparent) unless one of these applies, in this order:
 1. a phone notification card (replaces everything for its lifetime);
-2. music playing or paused in a phone media session: the media screen;
+2. the media screen, **only when asked for**: it shows when the user wakes the glasses with a touch or touches the
+   pad while the display is awake (the first touch only shows it, it does not pause), and hides itself 10 s after
+   the last touch. It never appears by itself because music plays, a track changes or a notification card ends;
 3. the phone link is lost: "Phone not connected" (30 px).
 The old "885rokidOS / Ready / Start a trip" screen is gone. After a card expires the display shows only
 what is left in that list, never the old screen.

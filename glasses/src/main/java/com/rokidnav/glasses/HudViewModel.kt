@@ -23,7 +23,7 @@ class HudViewModel(application:Application) : AndroidViewModel(application) {
             getApplication<Application>().assets.open("demo_trip.jsonl").bufferedReader().use { DemoRecording.parse(it.lineSequence()) }
         } else CxrPhoneLink.get(getApplication<Application>())
         viewModelScope.launch { link.incoming.collect {
-            if(it is HelloRequest){if(width>0)hello()} else {store.onMessage(it);if(it is PhoneNotification)wakeDisplay(it)}
+            if(it is HelloRequest){store.resetSequence();if(width>0)hello()} else {store.onMessage(it);if(it is PhoneNotification)wakeDisplay(it)}
         } }
         viewModelScope.launch { link.connected.collect { connected -> store.onConnection(connected);if(connected && width>0)hello() } }
         (link as? DemoPhoneLink)?.start()
@@ -42,7 +42,7 @@ class HudViewModel(application:Application) : AndroidViewModel(application) {
     }
     private fun hello(){link.send(GlassesHello(seq.next(),BuildConfig.VERSION_NAME,width,height))}
     /** Back in the foreground (e.g. reopened from the Rokid home screen): say hello so the phone resumes. */
-    fun onForeground(){if(::link.isInitialized && width>0)hello()}
+    fun onForeground(){store.onUserWake();if(::link.isInitialized && width>0)hello()}
     fun onDisplayReady(width:Int,height:Int){this.width=width;this.height=height;if(::link.isInitialized)hello()}
     /** Returns whether the HUD used the key (see [HudStore.onKey]). */
     fun onKey(key:GlassesKey):Boolean{if(::link.isInitialized)link.send(InputEvent(seq.next(),key.name));return store.onKey(key)}

@@ -34,7 +34,7 @@ class PhoneNotificationListener : NotificationListenerService() {
         RokidNavApp.instance.replies.remember(sbn)
         val body = notice.title + "\n" + notice.text
         if (lastSent.put(sbn.key, body) == body) return
-        RokidNavApp.instance.coordinator.forwardNotification(
+        val sent = RokidNavApp.instance.coordinator.forwardNotification(
             id = sbn.key,
             app = appLabel(sbn.packageName),
             // Payload size is undocumented; these limits are well under the route chunks we already send.
@@ -42,6 +42,7 @@ class PhoneNotificationListener : NotificationListenerService() {
             text = notice.text.take(MAX_TEXT),
             postedAtMs = sbn.postTime,
         )
+        Log.i(TAG, "forwarded app=${appLabel(sbn.packageName)} sent=$sent link=${RokidNavApp.instance.coordinator.linkStateName}")
     }
 
     /** Notification access was just granted (or the service restarted): media sessions are now readable. */

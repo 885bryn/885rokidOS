@@ -356,7 +356,7 @@ class HudRenderer(context: Context) {
                 // No trip: the screen is the player when music plays, otherwise black (transparent). A
                 // notification card replaces it. Only a lost phone link says anything.
                 if(s.notification==null) {
-                    if(s.media!=null) media(c,18f,110f)
+                    if(s.mediaVisible) media(c,18f,110f)
                     else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,30f,204)
                 }
             }
@@ -376,7 +376,7 @@ class HudRenderer(context: Context) {
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
             if(s.notification==null) {
-                if(s.media!=null) media(c,18f,408f)
+                if(s.mediaVisible) media(c,18f,408f)
                 else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,28f,204)
             }
             return

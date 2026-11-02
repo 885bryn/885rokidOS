@@ -43,6 +43,10 @@ data class HudState(
 
     /** What the phone plays, or null. Only track, artist and play state matter: nothing here moves with time. */
     val media: MediaState? = null,
+    /** The player is on screen only when the user asked for it (woke the glasses or touched the pad), never because
+     *  music is playing or a notification just ended. It hides itself after [HudStore.MEDIA_SHOW_MS]. */
+    val mediaShown: Boolean = false,
+    val mediaShownAt: Long = 0,
 
     val mode: HudMode = HudMode.Compact,
     val mapZoom: Int = 1,         // 0 = close (~300 m ahead), 1 = default (~800 m), 2 = far (~2 km)
@@ -51,6 +55,8 @@ data class HudState(
     val demoMode: Boolean = false,
     val nowMs: Long = 0,
 )
+
+val HudState.mediaVisible: Boolean get() = media != null && mediaShown
 
 data class HudRoad(val points: List<LatLng>, val name: String, val major: Boolean)
 

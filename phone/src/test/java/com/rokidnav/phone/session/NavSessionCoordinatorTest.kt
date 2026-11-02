@@ -112,6 +112,16 @@ class NavSessionCoordinatorTest {
         runCurrent()
         assertEquals(listOf("playPause", "next", "previous"), media.calls)
     }
+    @Test fun messageNumbersStartFromTheGivenCounterStartSoARestartedPhoneCountsHigher() = runTest {
+        val engine = Engine()
+        val link = Link()
+        // The real start is the clock; a restart is later than the last run, so its numbers are higher.
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents, seqStart = 5_000_000_000L)
+        coordinator.start(); runCurrent()
+        coordinator.forwardNotification("n1", "App", "Title", "Text", 0)
+        assertTrue(link.sent.isNotEmpty())
+        assertTrue(link.sent.all { it.seq > 5_000_000_000L })
+    }
     private val noIncidents = object : IncidentProvider {
         override val name = "none"
         override fun incidentsAlong(routePolyline: String) = flowOf(emptyList<Incident>())

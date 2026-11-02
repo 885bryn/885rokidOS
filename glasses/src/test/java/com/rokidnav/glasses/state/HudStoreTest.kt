@@ -152,7 +152,7 @@ class HudStoreTest {
     @Test fun idleMediaScreenTapsPlayPauseAndSwipesSkip() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
-        hud.onMessage(media(1))
+        hud.onMessage(media(1));hud.onUserWake()
         hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD);hud.onKey(GlassesKey.SWIPE_BACK)
         assertEquals(listOf(ActionType.MEDIA_PLAY_PAUSE,ActionType.MEDIA_NEXT,ActionType.MEDIA_PREVIOUS),sent.map {it.action})
         // The icon follows the tap at once; the view mode does not change.
@@ -190,7 +190,7 @@ class HudStoreTest {
     @Test fun oneGestureReportedByThreeInputPathsSendsOneMediaAction() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
-        hud.onMessage(media(1))
+        hud.onMessage(media(1));hud.onUserWake()
         // Broadcast, key event and touch for one swipe, within a few ms of each other.
         hud.onKey(GlassesKey.SWIPE_FORWARD);now+=15;hud.onKey(GlassesKey.SWIPE_FORWARD);now+=40;hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(listOf(ActionType.MEDIA_NEXT),sent.map {it.action})
@@ -218,6 +218,52 @@ class HudStoreTest {
         assertNull(hud.state.value.notification)
         val quiet=hud.state.value
         now+=1_000;hud.tick()
-        assertEquals(true,hud.state===null || hud.state.value===quiet)
+        assertEquals(true,hud.state.value===quiet)
+    }
+
+    @Test fun aRestartedPhoneCountingFromOneIsHeardAfterANewSessionStarts() {
+        val hud=HudStore {sent+=it}
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(500,"old","App","Old","Before the restart"))
+        // The phone app restarts and counts from 1 again: its messages look old and are dropped...
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(2,"n1","Messages","Sam","After"))
+        assertEquals("Old",hud.state.value.notification?.title)
+        // ...until its new session says hello, which restarts the numbering.
+        hud.resetSequence()
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(2,"n1","Messages","Sam","After"))
+        assertEquals("Sam",hud.state.value.notification?.title)
+    }
+
+    @Test fun thePlayerNeverAppearsOnItsOwnAndNotificationsAndMediaStaySeparate() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(media(1))
+        assertEquals(false,hud.state.value.mediaVisible)
+        // A card arrives while the player is up: the player goes away and does not return after the card.
+        hud.onUserWake()
+        assertEquals(true,hud.state.value.mediaVisible)
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(2,"n1","Messages","Sam","Hi"))
+        assertEquals(false,hud.state.value.mediaVisible)
+        now+=HudStore.NOTIFICATION_MAX_MS;hud.tick()
+        assertNull(hud.state.value.notification)
+        assertEquals(false,hud.state.value.mediaVisible)
+        // The display waking for a card is not a user wake.
+        hud.onMessage(com.rokidnav.protocol.PhoneNotification(3,"n2","Messages","Sam","Again"))
+        hud.onUserWake()
+        assertEquals(false,hud.state.value.mediaShown)
+    }
+
+    @Test fun theFirstTouchOnlyShowsThePlayerAndItHidesAfterTenSeconds() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(media(1))
+        hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.TAP)
+        assertEquals(true,hud.state.value.mediaVisible)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.MEDIA_PLAY_PAUSE),sent.map {it.action})
+        now+=HudStore.MEDIA_SHOW_MS-1_000;hud.tick()
+        assertEquals(true,hud.state.value.mediaVisible)
+        now+=2_000;hud.tick()
+        assertEquals(false,hud.state.value.mediaVisible)
     }
 }

@@ -86,3 +86,8 @@ Resync messages use fresh increasing sequence numbers: session_start (resets rec
 trip snapshots), route chunks, then cached position/maneuver/progress/settings/traffic/alerts.
 The glasses reject stale/duplicate sequence numbers after session_start. An incomplete route
 requests a resync after five seconds. A phone restart can begin again with a lower session_start seq.
+
+The phone starts its counter from the clock (epoch ms), so a restarted phone counts above its last run; and the HUD
+forgets its last number whenever the phone's session sends `hello_request`. Both exist because the glasses HUD
+keeps running when the phone app restarts (found 2026-11-01: after a phone-only reinstall the HUD dropped every
+notification and media update as "old" while still waking the display).

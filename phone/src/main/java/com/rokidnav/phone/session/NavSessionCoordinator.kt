@@ -15,8 +15,11 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val roads:com.rokidnav.phone.map.RoadContextProvider?=null,
     private val settings:SettingsRepository?=null,
     private val speaker:AlertSpeaker?=null,
-    private val media:com.rokidnav.phone.media.MediaSource?=null) {
-    private val seq=SeqCounter()
+    private val media:com.rokidnav.phone.media.MediaSource?=null,
+    // The glasses HUD outlives the phone app and drops any message numbered at or below the last it saw, so a
+    // restarted phone must count higher than before: start from the clock (a restart is always later).
+    seqStart:Long=System.currentTimeMillis()) {
+    private val seq=SeqCounter(seqStart)
     private val announcer=AlertAnnouncer({preferences})
     private val lastSent=linkedMapOf<String,NavMessage>()
     private val activeAlerts=linkedMapOf<String,Alert>()
@@ -169,10 +172,10 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         link.send(DetourResolved(seq.next(),message.offerId,accepted))
     }
     /** Not cached for resync: a notification only matters when it arrives. Dropped unless the link is Ready. */
-    fun forwardNotification(id:String,app:String,title:String,text:String,postedAtMs:Long){
-        val sent=link.send(PhoneNotification(seq.next(),id,app,title,text,postedAtMs))
-        android.util.Log.i("RokidNavNotify","forwarded app=$app sent=$sent link=${link.state.value::class.simpleName}")
-    }
+    fun forwardNotification(id:String,app:String,title:String,text:String,postedAtMs:Long):Boolean=
+        link.send(PhoneNotification(seq.next(),id,app,title,text,postedAtMs))
+    /** For the log only. */
+    val linkStateName:String get()=link.state.value::class.simpleName.orEmpty()
     fun respondToDetour(accept:Boolean){offer.value?.let {action(GlassesAction(0,if(accept)ActionType.ACCEPT_DETOUR else ActionType.DISMISS_DETOUR,it.offerId))}}
     private fun applySettings(value:UserSettings) {
         preferences=value;engine.setVoiceMuted(value.voiceMuted)

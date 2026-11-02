@@ -21,6 +21,10 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     private var lastMediaKey:GlassesKey?=null
     private var lastMediaKeyAt=0L
     private var arrivedAt=0L
+    /** The HUD came to the front. If no card caused that, the user did (a touch woke the glasses): show the player. */
+    fun onUserWake(){mutable.update {if(it.notification==null)it.copy(mediaShown=true,mediaShownAt=clock()) else it}}
+    /** A new phone session began (HelloRequest): the phone may have restarted and count from a lower number. */
+    fun resetSequence(){lastSeq=-1L}
     fun onConnection(connected:Boolean){mutable.update {it.copy(linkConnected=connected)}}
     fun onMessage(m:NavMessage) {
         lastMessageAt=clock()
@@ -69,7 +73,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             // Position-only changes (a seek, a resync) change nothing on screen, so they do not redraw.
             is MediaState->mutable.update {s->val next=m.takeIf {it.active}
                 if(sameOnScreen(s.media,next))s else s.copy(media=next)}
-            is PhoneNotification->mutable.update {it.copy(notification=m,notificationShownAt=clock(),nowMs=clock())}
+            // A notification and the player never share the screen, and the player does not come back after the card.
+            is PhoneNotification->mutable.update {it.copy(notification=m,notificationShownAt=clock(),nowMs=clock(),mediaShown=false)}
             else->Unit
         }
     }
@@ -101,6 +106,12 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             // A detour offer hides the card, so its taps above win; otherwise a tap only hides the card.
             s.notification!=null && key==GlassesKey.TAP->mutable.update {it.copy(notification=null)}
             // No trip and music playing: the idle screen is the player.
+            // The first touch only brings the player up (it must be seen before it is controlled); the same gesture
+            // arriving again by another input path is dropped by the media key guard.
+            idleMedia(s) && !s.mediaShown && (key==GlassesKey.TAP || key==GlassesKey.SWIPE_FORWARD || key==GlassesKey.SWIPE_BACK)->{
+                lastMediaKey=key;lastMediaKeyAt=clock()
+                mutable.update {it.copy(mediaShown=true,mediaShownAt=clock())}
+            }
             idleMedia(s) && (key==GlassesKey.TAP || key==GlassesKey.SWIPE_FORWARD || key==GlassesKey.SWIPE_BACK)->mediaKey(key)
             key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
             key==GlassesKey.SWIPE_FORWARD->{mutable.update {it.copy(mapZoom=(it.mapZoom-1).coerceAtLeast(0))};sendAction(GlassesAction(0,ActionType.ZOOM_IN))}
@@ -120,6 +131,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         val now=clock()
         if(key==lastMediaKey && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS)return
         lastMediaKey=key;lastMediaKeyAt=now
+        mutable.update {it.copy(mediaShownAt=now)}
         when(key) {
             GlassesKey.TAP->{
                 sendAction(GlassesAction(0,ActionType.MEDIA_PLAY_PAUSE))
@@ -143,6 +155,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             alerts=if(stale.isEmpty())s.alerts else s.alerts.filterNot {it.id in stale},
             alertSeenAt=if(stale.isEmpty())s.alertSeenAt else s.alertSeenAt-stale,
             notification=s.notification?.takeIf {now-s.notificationShownAt<notificationMillis(it)},
+            mediaShown=s.mediaShown && now-s.mediaShownAt<MEDIA_SHOW_MS,
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
             // Otherwise an unchanged state is not re-emitted, so an idle HUD does not redraw every second.
@@ -154,6 +167,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         const val ALERT_STALE_MS=120_000L
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L
+        /** How long the player stays after the last touch. */
+        const val MEDIA_SHOW_MS=10_000L
         /** Longer than the spread between the three input paths of one gesture, shorter than two real ones. */
         const val MEDIA_KEY_GAP_MS=600L
         /** How long a card stays: longer text stays longer, but never past the maximum (driver safety). */
