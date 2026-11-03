@@ -139,3 +139,13 @@ Glasses send `OPEN_GROK_BOT` on an idle tap or a trip swipe back; no speech step
 `ScreenLockService` (accessibility service, `GLOBAL_ACTION_LOCK_SCREEN`) locks the phone after `GrokBotUnlockActivity` starts Grok Bot from the lock screen: once any recording is active plus 1 s, or after 8 s. Verify command passed; phone app installed. User enabled restricted settings and the service.
 
 | Tap from pocket, phone locked, Smart Lock and service on | Grok Bot talks in the glasses; screen turns off | User confirmed | Pass, user report |
+
+## Grok Bot close tap and screen rule — 2026-11-03
+
+Changes: the waking touch counts as a tap; a tap on the 2 s Grok Bot card goes to the phone again; the phone says "Closing Grok Bot" while a chat runs (audio mode `MODE_IN_COMMUNICATION`); the phone polls the chat each second after a gesture and sends `GrokBotState`, and the glasses hold the display with "GROK BOT · TAP to end" while it runs; `ScreenLockService` runs only when the phone screen was off at the gesture. Verify command passed: 137 tests, zero failures. Phone app (bundled HUD) installed.
+
+| One tap closes a running chat, also after the glasses display would sleep | One tap, every time | User confirmed | Pass, user report |
+| Phone screen off at the tap | Phone locks again after Grok Bot starts | User confirmed | Pass, user report |
+| Phone screen on at the tap | Screen stays on | User confirmed | Pass, user report |
+
+Not measured: battery cost of the held display during a chat.

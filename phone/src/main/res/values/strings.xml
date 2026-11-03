@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="screen_lock_service_description">Locks the phone again after a glasses tap starts Grok Bot from the lock screen, so the screen turns off in your pocket. It reads nothing on the screen.</string>
+    <string name="screen_lock_service_description">Locks the phone again after a glasses tap starts or closes Grok Bot, so the screen turns off in your pocket. It reads nothing on the screen.</string>
 </resources>

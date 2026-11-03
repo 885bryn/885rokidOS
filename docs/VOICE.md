@@ -61,10 +61,15 @@ Message text is never logged by the real flow.
    voice chat uses the glasses mic and speaker. On the lock screen, `GrokBotUnlockActivity` turns the screen on and removes the
    lock screen first; this works only when Smart Lock keeps the phone unlocked, else the glasses say "Unlock the phone for Grok Bot".
 3. The glasses show "Opening Grok Bot on the phone" (`SENT`) or the reason it did not work (`FAILED`) for 2 s.
-4. After a start from the lock screen, `ScreenLockService` locks the phone again once Grok Bot records (at most 8 s), so
-   the screen goes off in the pocket. The chat keeps running. Turn the service on in Settings, Accessibility, "885rokidOS
+4. When the phone screen was off at the gesture, `ScreenLockService` locks the phone again once Grok Bot records (at most
+   8 s), so the screen goes off in the pocket. A screen that was on stays on. The chat keeps running. Turn the service on in Settings, Accessibility, "885rokidOS
    screen lock" (Android 13+: first allow restricted settings in the 885rokidOS app info). Without it the screen stays on.
-5. A second tap during a chat ends it (Grok Bot's own behavior for a second `ACTION_ASSIST`; not designed here).
+5. A second tap during a chat ends it (Grok Bot ends the chat on a second `ACTION_ASSIST`). The phone sees the chat by the
+   audio mode (`GrokBot.running`: `MODE_IN_COMMUNICATION`) and the glasses say "Closing Grok Bot". A tap on the Grok Bot
+   card (up for 2 s after each tap) does the same; a double tap only closes the card.
+6. The touch that wakes a sleeping display counts as the tap (since 2026-11-03). It does not always reach the app, so while a
+   chat runs the phone sends `GrokBotState` (it polls the audio mode each second) and the glasses keep the display on and show
+   "GROK BOT · TAP to end". The tap that ends the chat then never meets a sleeping display.
 
 The spoken form ("open Grok Bot" after `VOICE_START` with `VOICE_COMMAND_ID`, matched by `VoiceCommands.opensGrokBot`) still works
 on the phone, but the HUD no longer sends it.

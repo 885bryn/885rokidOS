@@ -46,6 +46,8 @@ data class HudState(
     val voiceAt: Long = 0,
     /** Focused row of the review screen: 0 Send, 1 Redo, 2 Cancel. */
     val voiceFocus: Int = 0,
+    /** A Grok Bot chat runs on the phone: the display stays on and shows that a tap ends it. */
+    val grokBotActive: Boolean = false,
 
     /** What the phone plays, or null. Only track, artist and play state matter: nothing here moves with time. */
     val media: MediaState? = null,

@@ -78,6 +78,7 @@ class RokidOs885App : Application() {
             // Debug builds keep the last spoken reply's audio on the phone (private folder) to diagnose recognition.
             voiceAudio = if(BuildConfig.DEBUG)lastVoiceRecorder(java.io.File(filesDir,"voice-last.pcm")) else null,
             openGrokBot = {com.rokidos885.phone.voice.GrokBot.open(this)},
+            grokBotRunning = {com.rokidos885.phone.voice.GrokBot.running(this)},
         )
         coordinator.start()
         media.start()

@@ -8,7 +8,7 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * Locks the phone again (like the power button) after Grok Bot started from the lock screen, so the screen does not stay on
+ * Locks the phone again (like the power button) after the glasses started or closed Grok Bot, so the screen does not stay on
  * in a pocket. A normal app cannot turn the screen off; an accessibility service can ([GLOBAL_ACTION_LOCK_SCREEN]). The user
  * turns it on in Settings, Accessibility; without it nothing happens. Smart Lock stays on after this lock, and the Grok Bot
  * voice chat keeps running with the screen off (tested 2026-11-02, docs/LOCAL_TEST_RESULTS.md). Reads no screen content.
@@ -29,7 +29,7 @@ class ScreenLockService : AccessibilityService() {
 
         /**
          * Locks once Grok Bot records (any app's recording: Android hides which one), plus [AFTER_MIC_MS]; or after
-         * [MAX_WAIT_MS] when nothing records (a second tap that ended the chat). The phone was locked before, so lock anyway.
+         * [MAX_WAIT_MS] when nothing records (a second tap that ended the chat). A glasses start means a pocket, so lock anyway.
          */
         fun lockAfterGrokBotStarts(context: Context) {
             if (running == null) return

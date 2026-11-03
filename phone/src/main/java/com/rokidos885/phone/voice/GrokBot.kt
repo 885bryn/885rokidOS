@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
+import android.os.PowerManager
 import android.provider.Settings
 
 /** Starts a Grok Bot voice chat on the phone for the voice command "open Grok Bot". */
@@ -20,14 +22,26 @@ object GrokBot {
         // Behind the keyguard Grok Bot stays hidden and never listens. With Smart Lock the keyguard can go without a PIN;
         // when the device is really locked, do not open the PIN screen in a pocket.
         val keyguard = context.getSystemService(KeyguardManager::class.java)
+        // Only a screen that was off goes off again; a screen that was on stays on (user choice 2026-11-03).
+        val screenWasOff = !context.getSystemService(PowerManager::class.java).isInteractive
         if (keyguard.isKeyguardLocked) {
             if (keyguard.isDeviceLocked) return "Unlock the phone for Grok Bot"
-            context.startActivity(Intent(context, GrokBotUnlockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(Intent(context, GrokBotUnlockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(GrokBotUnlockActivity.EXTRA_LOCK_AFTER, screenWasOff))
             return null
         }
         context.startActivity(intent)
+        if (screenWasOff) ScreenLockService.lockAfterGrokBotStarts(context)
         return null
     }
+
+    /**
+     * True while a Grok Bot voice chat runs: then [open] closes it (Grok Bot ends the chat on a second ACTION_ASSIST).
+     * Grok Bot holds the phone in MODE_IN_COMMUNICATION for the chat and sets MODE_NORMAL when it ends (2026-11-03). Android
+     * does not say which app set the mode, so another app's internet call also counts.
+     */
+    fun running(context: Context): Boolean =
+        context.getSystemService(AudioManager::class.java).mode == AudioManager.MODE_IN_COMMUNICATION
 
     /** The Grok Bot start, or null when Grok Bot is not installed. */
     fun intent(context: Context): Intent? {

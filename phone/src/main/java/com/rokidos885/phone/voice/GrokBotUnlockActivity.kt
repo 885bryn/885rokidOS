@@ -17,12 +17,17 @@ class GrokBotUnlockActivity : Activity() {
         getSystemService(KeyguardManager::class.java).requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
             override fun onDismissSucceeded() {
                 GrokBot.intent(this@GrokBotUnlockActivity)?.let { startActivity(it) }
-                // The phone was on the lock screen (in a pocket): lock it again once Grok Bot listens.
-                ScreenLockService.lockAfterGrokBotStarts(this@GrokBotUnlockActivity)
+                // The screen was off (in a pocket): lock it again once Grok Bot listens.
+                if (intent.getBooleanExtra(EXTRA_LOCK_AFTER, false)) ScreenLockService.lockAfterGrokBotStarts(this@GrokBotUnlockActivity)
                 finish()
             }
             override fun onDismissError() = finish()
             override fun onDismissCancelled() = finish()
         })
+    }
+
+    companion object {
+        /** True when the phone screen was off at the glasses tap. */
+        const val EXTRA_LOCK_AFTER = "lock_after"
     }
 }

@@ -264,10 +264,6 @@ class HudStoreTest {
         now+=HudStore.NOTIFICATION_MAX_MS;hud.tick()
         assertNull(hud.state.value.notification)
         assertEquals(false,hud.state.value.mediaVisible)
-        // The display waking for a card is not a user wake.
-        hud.onMessage(com.rokidos885.protocol.PhoneNotification(3,"n2","Messages","Sam","Again"))
-        hud.onUserWake()
-        assertEquals(false,hud.state.value.mediaShown)
     }
 
     @Test fun theFirstSwipeOnlyShowsThePlayerAndItHidesAfterTenSeconds() {
@@ -310,35 +306,61 @@ class HudStoreTest {
         assertEquals(HudMode.Map,hud.state.value.mode)
     }
 
-    @Test fun aRepeatedTapOrTheWakingTouchNeverStartsACommandByAccident() {
+    @Test fun aRepeatedTapNeverStartsACommandButTheWakingTouchDoes() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onConnection(true)
         // The tap that closes a card arrives again by another input path.
         hud.onMessage(replyCard(canReply=false));hud.onKey(GlassesKey.TAP);now+=40;hud.onKey(GlassesKey.TAP)
-        // The tap that closes a voice result does too.
-        hud.onMessage(com.rokidos885.protocol.VoiceState(cardSeq++,com.rokidos885.protocol.VoicePhase.FAILED,com.rokidos885.protocol.VOICE_COMMAND_ID,"Heard nothing"))
+        // The tap that closes a reply's voice result does too.
+        hud.onMessage(com.rokidos885.protocol.VoiceState(cardSeq++,com.rokidos885.protocol.VoicePhase.FAILED,"n1","The app refused the reply"))
         now+=1_000;hud.onKey(GlassesKey.TAP);now+=40;hud.onKey(GlassesKey.TAP)
-        // The touch that woke the glasses.
-        now+=1_000;hud.onUserWake();hud.onKey(GlassesKey.TAP)
         assertEquals(emptyList<ActionType>(),sent.map {it.action})
-        // A deliberate tap afterwards does start one.
-        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        // The touch that wakes the glasses (onStart) is a tap like any other: one tap is enough.
+        now+=1_000;hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
     }
 
-    @Test fun wakingWithMusicKeepsPlayerHiddenAndNextTapStartsCommand() {
+    @Test fun aRunningGrokBotChatIsKnownUntilItEndsOrTheLinkDrops() {
+        val hud=HudStore({1_000L}) {sent+=it}
+        hud.onConnection(true)
+        hud.onMessage(com.rokidos885.protocol.GrokBotState(1,true))
+        assertEquals(true,hud.state.value.grokBotActive)
+        // The tap on the empty screen still goes to the phone, which closes the chat.
+        hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
+        hud.onMessage(com.rokidos885.protocol.GrokBotState(2,false))
+        assertEquals(false,hud.state.value.grokBotActive)
+        // Without the link nobody can say it ended: the display is not held for it.
+        hud.onMessage(com.rokidos885.protocol.GrokBotState(3,true));hud.onConnection(false)
+        assertEquals(false,hud.state.value.grokBotActive)
+    }
+
+    @Test fun aTapOnTheGrokBotCardStartsOrClosesGrokBotAgain() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true)
+        hud.onKey(GlassesKey.TAP)
+        // Within the 2 s the answer shows, the next tap (reported twice) goes to the phone again, once.
+        hud.onMessage(com.rokidos885.protocol.VoiceState(1,com.rokidos885.protocol.VoicePhase.SENT,com.rokidos885.protocol.VOICE_COMMAND_ID,"Opening Grok Bot on the phone"))
+        now+=1_000;hud.onKey(GlassesKey.TAP);now+=15;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.OPEN_GROK_BOT,ActionType.OPEN_GROK_BOT),sent.map {it.action})
+        assertEquals(com.rokidos885.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
+        // Double tap still only closes the card.
+        hud.onMessage(com.rokidos885.protocol.VoiceState(2,com.rokidos885.protocol.VoicePhase.SENT,com.rokidos885.protocol.VOICE_COMMAND_ID,"Closing Grok Bot"))
+        now+=1_000;hud.onKey(GlassesKey.DOUBLE_TAP)
+        assertNull(hud.state.value.voice)
+        assertEquals(2,sent.size)
+    }
+
+    @Test fun withMusicAndThePlayerHiddenTheFirstTapStartsGrokBot() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onConnection(true);hud.onMessage(media(1))
         hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(true,hud.state.value.mediaVisible)
         now+=HudStore.MEDIA_SHOW_MS;hud.tick()
-        hud.onUserWake();hud.onKey(GlassesKey.TAP)
-        assertEquals(false,hud.state.value.mediaVisible)
-        assertNull(hud.state.value.voice)
-        assertEquals(emptyList<ActionType>(),sent.map {it.action})
-        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
         assertEquals(com.rokidos885.protocol.VOICE_COMMAND_ID,sent.single().targetId)
         assertEquals(false,hud.state.value.mediaVisible)

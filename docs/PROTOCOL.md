@@ -59,6 +59,7 @@ and opens a new session, which installs and opens the bundled APK. Tried once pe
 | `media` | track, play state or seek changes; resync | active (false = nothing playing), app, title, artist, playing, positionMs (at send time) and durationMs (0 = unknown); the glasses ignore both since the HUD has no bar, and a message that changes only the position does not redraw. Not part of the `lastSent` cache: resync sends it with the position moved forward. |
 | `notification` | phone notification posted (only while the link is Ready) | id, app, title, text, postedAtMs, canReply (the app has a free-text reply box). Shown as a short card; never resent on resync. |
 | `voice` | each step of a voice reply or voice command | phase (IDLE clears, LISTENING, REVIEW, SENT, FAILED), notificationId (`VOICE_COMMAND_ID` = "voice-command" for a spoken command), text (words so far / final words / reason; for a command, the SENT text says what was done). Commands skip REVIEW. Not cached for resync. |
+| `grok_bot` | a Grok Bot chat started from the glasses runs or ended | active. The glasses keep the display on and show "GROK BOT · TAP to end" while active. Sent on change and on resync. |
 
 ## Glasses → phone
 | `t` | When |

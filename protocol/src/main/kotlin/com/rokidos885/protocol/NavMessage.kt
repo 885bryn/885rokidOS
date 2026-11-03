@@ -226,6 +226,13 @@ data class VoiceState(
  */
 const val VOICE_COMMAND_ID = "voice-command"
 
+/**
+ * A Grok Bot voice chat started from the glasses runs on the phone ([active]) or ended. Meanwhile the glasses keep the
+ * display on and show that a tap ends it, so the ending tap never only wakes a sleeping display. Sent on change and on resync.
+ */
+@Serializable @SerialName("grok_bot")
+data class GrokBotState(override val seq: Long, val active: Boolean) : NavMessage
+
 // ---------------------------------------------------------------- glasses -> phone
 
 @Serializable @SerialName("hello")

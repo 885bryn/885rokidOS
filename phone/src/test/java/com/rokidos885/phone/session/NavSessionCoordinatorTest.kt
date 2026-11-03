@@ -117,12 +117,17 @@ class NavSessionCoordinatorTest {
         val link = Link()
         var problem: String? = null
         var opened = 0
+        var chat = false
         val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents,
-            openGrokBot = { opened++; problem })
+            openGrokBot = { opened++; chat = !chat; problem }, grokBotRunning = { chat })
         coordinator.start(); runCurrent()
         link.incoming.emit(GlassesAction(1, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
         assertEquals(1, opened)
         assertEquals(VoiceState(0, VoicePhase.SENT, VOICE_COMMAND_ID, "Opening Grok Bot on the phone"), link.sent.filterIsInstance<VoiceState>().last().copy(seq = 0))
+        // The same gesture during a chat closes it, and the glasses say so (the state is read before the start).
+        link.incoming.emit(GlassesAction(2, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals(VoiceState(0, VoicePhase.SENT, VOICE_COMMAND_ID, "Closing Grok Bot"), link.sent.filterIsInstance<VoiceState>().last().copy(seq = 0))
+        chat = false
         problem = "Unlock the phone for Grok Bot"
         link.incoming.emit(GlassesAction(2, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
         assertEquals(VoiceState(0, VoicePhase.FAILED, VOICE_COMMAND_ID, "Unlock the phone for Grok Bot"), link.sent.filterIsInstance<VoiceState>().last().copy(seq = 0))
@@ -132,6 +137,28 @@ class NavSessionCoordinatorTest {
         plain.start(); runCurrent()
         bare.incoming.emit(GlassesAction(3, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
         assertEquals(VoicePhase.FAILED, bare.sent.filterIsInstance<VoiceState>().last().phase)
+    }
+    @Test fun tellsTheGlassesWhileAGrokBotChatRuns() = runTest {
+        val engine = Engine()
+        val link = Link()
+        var chat = false
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents,
+            openGrokBot = { null }, grokBotRunning = { chat })
+        coordinator.start(); runCurrent()
+        fun states() = link.sent.filterIsInstance<GrokBotState>().map { it.active }
+        link.incoming.emit(GlassesAction(1, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals(emptyList<Boolean>(), states())
+        // Grok Bot takes about a second to start its chat.
+        chat = true; advanceTimeBy(1_500); runCurrent()
+        assertEquals(listOf(true), states())
+        // A reconnect says it again.
+        link.sent.clear(); link.incoming.emit(ResyncRequest(2)); runCurrent()
+        assertEquals(listOf(true), states())
+        // The chat ends (on the phone or by a tap): the glasses hear it once, then the polling stops.
+        link.sent.clear(); chat = false; advanceTimeBy(1_500); runCurrent()
+        assertEquals(listOf(false), states())
+        chat = true; advanceTimeBy(30_000); runCurrent()
+        assertEquals(listOf(false), states())
     }
     @Test fun messageNumbersStartFromTheGivenCounterStartSoARestartedPhoneCountsHigher() = runTest {
         val engine = Engine()

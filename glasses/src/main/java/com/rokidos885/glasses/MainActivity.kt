@@ -114,7 +114,8 @@ class MainActivity:AppCompatActivity() {
     private fun keepScreenOn(s:com.rokidos885.glasses.state.HudState) {
         val live=s.navState in HOLD_SCREEN && s.linkConnected && !s.phoneSilent
         // VERIFY: whether a card wakes a display that is already asleep; this only keeps an awake one on.
-        val hold=live || s.notification!=null || s.voice!=null
+        // A Grok Bot chat holds it too: the tap that ends the chat must not only wake the display.
+        val hold=live || s.notification!=null || s.voice!=null || s.grokBotActive
         if(hold!=screenHeld) {
             screenHeld=hold
             if(hold)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

@@ -378,6 +378,7 @@ class HudRenderer(context: Context) {
                 if(s.notification==null && s.voice==null) {
                     if(s.mediaVisible) media(c,18f,110f)
                     else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,30f,204)
+                    if(s.grokBotActive) center(c,GROK_ON,240f,380f,20f,153)
                 }
             }
             else -> {
@@ -398,6 +399,7 @@ class HudRenderer(context: Context) {
             if(s.notification==null && s.voice==null) {
                 if(s.mediaVisible) media(c,18f,408f)
                 else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,28f,204)
+                if(s.grokBotActive) text(c,GROK_ON,18f,if(s.mediaVisible)380f else 600f,20f,153)
             }
             return
         }
@@ -849,6 +851,8 @@ class HudRenderer(context: Context) {
         private const val MEDIA_W = 444f
         /** Cards narrower than this are the trip's corner card (222 wide). */
         private const val NARROW_CARD = 300f
+        /** Shown without a trip while a Grok Bot chat runs (on a trip the display stays on anyway). */
+        private const val GROK_ON = "GROK BOT  ·  TAP to end"
         private const val VOICE_SIZE = 26f
         private const val VOICE_STEP = 32f
         private const val VOICE_ROW = 44f

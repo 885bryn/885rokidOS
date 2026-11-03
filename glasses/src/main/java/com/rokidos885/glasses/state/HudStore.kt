@@ -21,13 +21,11 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     private var lastMediaKey:GlassesKey?=null
     private var lastMediaKeyAt=0L
     private var arrivedAt=0L
-    private var wokeAt=Long.MIN_VALUE/2
     private fun resultOver(s:HudState,now:Long)=s.voice!=null && (s.voice.phase==VoicePhase.SENT || s.voice.phase==VoicePhase.FAILED) && now-s.voiceAt>=REPLY_RESULT_MS
-    /** Ignore the waking touch without revealing the player; a swipe reveals it. */
-    fun onUserWake(){wokeAt=clock()}
     /** A new phone session began (HelloRequest): the phone may have restarted and count from a lower number. */
     fun resetSequence(){lastSeq=-1L}
-    fun onConnection(connected:Boolean){mutable.update {it.copy(linkConnected=connected)}}
+    // Without the link the phone cannot say the chat ended, so do not keep the display on for it (resync says it again).
+    fun onConnection(connected:Boolean){mutable.update {it.copy(linkConnected=connected,grokBotActive=it.grokBotActive && connected)}}
     fun onMessage(m:NavMessage) {
         lastMessageAt=clock()
         if(state.value.phoneSilent)mutable.update {it.copy(phoneSilent=false)}
@@ -82,6 +80,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 if(m.phase==VoicePhase.IDLE)s.copy(voice=null,voiceFocus=0)
                 else s.copy(voice=m,voiceAt=clock(),nowMs=clock(),voiceFocus=if(s.voice?.phase==m.phase)s.voiceFocus else 0)
             }
+            is GrokBotState->mutable.update {it.copy(grokBotActive=m.active)}
             else->Unit
         }
     }
@@ -125,10 +124,11 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             // No trip and the player on screen: tap plays or pauses, swipe skips.
             idleMedia(s) && s.mediaShown && !back->mediaKey(key)
             // No trip and nothing on screen: tap starts Grok Bot on the phone. The tap that closed a card or a voice
-            // result, arriving again by another input path, or the touch that woke the glasses, is not one.
+            // result, arriving again by another input path, is not one. The touch that wakes the display is: one tap works
+            // whether or not the display slept, so nobody has to guess (user request 2026-11-03).
             idle(s) && key==GlassesKey.TAP && s.linkConnected->{
                 val now=clock()
-                if(!(lastMediaKey==key && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS) && now-wokeAt>=MEDIA_KEY_GAP_MS)startVoice(VOICE_COMMAND_ID,action=ActionType.OPEN_GROK_BOT)
+                if(!(lastMediaKey==key && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS))startVoice(VOICE_COMMAND_ID,action=ActionType.OPEN_GROK_BOT)
             }
             // Music but the player hidden: a swipe brings it up (it must be seen before it is controlled); the same
             // gesture arriving again by another input path is dropped by the media key guard.
@@ -193,6 +193,12 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         val now=clock()
         if(key==lastMediaKey && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS)return
         lastMediaKey=key;lastMediaKeyAt=now
+        // The Grok Bot card (no speech step) is up for 2 s after each tap: its own gesture (tap, or swipe back on a trip)
+        // starts or closes Grok Bot again, as on the empty screen, instead of only closing the card.
+        if(id==VOICE_COMMAND_ID && v.phase in GROK_CARD && (key==GlassesKey.TAP || key==GlassesKey.SWIPE_BACK)) {
+            startVoice(id,key,ActionType.OPEN_GROK_BOT)
+            return
+        }
         when(v.phase) {
             VoicePhase.STARTING->if(key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK)cancel()
             VoicePhase.LISTENING->when(key) {
@@ -241,6 +247,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     }
     suspend fun tickLoop(){while(true){tick();delay(1000)}}
     companion object {
+        /** Phases of the Grok Bot card: waiting for the phone, or its answer. */
+        private val GROK_CARD=setOf(VoicePhase.STARTING,VoicePhase.SENT,VoicePhase.FAILED)
         const val ALERT_STALE_MS=120_000L
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L
