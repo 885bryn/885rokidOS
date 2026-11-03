@@ -3,7 +3,7 @@
     <application>
         <!-- Debug builds only: replays the saved voice recording through the recognizer (adb am broadcast). -->
         <receiver
-            android:name="com.rokidnav.phone.debug.VoiceReplayReceiver"
+            android:name="com.rokidos885.phone.debug.VoiceReplayReceiver"
             android:exported="true" />
     </application>
 </manifest>

@@ -5,12 +5,12 @@ plugins {
 }
 
 android {
-    namespace = "com.rokidnav.glasses"
+    namespace = "com.rokidos885.glasses"
     compileSdk = 34
 
     defaultConfig {
         // Must equal phone BuildConfig.GLASSES_PACKAGE (CXR-L glassesPackageName).
-        applicationId = "com.rokidnav.glasses"
+        applicationId = "com.rokidos885.glasses"
         minSdk = 28 // Connected glasses installed and ran this APK successfully.
         targetSdk = 34
         versionCode = 2
