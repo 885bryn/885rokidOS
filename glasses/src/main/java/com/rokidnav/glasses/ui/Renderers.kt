@@ -276,7 +276,8 @@ class HudRenderer(context: Context) {
             next.voice?.let { v ->
                 if(v!==old.voice || n!==old.notification || moved) {
                     val command=v.notificationId==VOICE_COMMAND_ID
-                    voiceHeader=ellipsize(if(command)"VOICE COMMAND" else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
+                    // On a trip the corner card is narrow (the turn stays visible to its left): a shorter header.
+                    voiceHeader=ellipsize(if(command)(if(cardW<NARROW_CARD)"COMMAND" else "VOICE COMMAND") else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
                     // A command's result says what was done ("Opening Grok Bot on the phone").
                     val shown=when(v.phase) { VoicePhase.SENT->v.text.ifBlank{"Sent"}; VoicePhase.STARTING->"Starting…"
                         VoicePhase.LISTENING->v.text.ifBlank{if(command)"Say \"open Grok Bot\"" else "Speak now…"}; else->v.text }
@@ -793,7 +794,8 @@ class HudRenderer(context: Context) {
         right(c,status,cardLeft+cardW-16f,top+26f,17f,179,b=true)
         val dim=if((v.phase==VoicePhase.LISTENING && v.text.isBlank()) || v.phase==VoicePhase.STARTING)153 else 245
         for(i in voiceLines.indices)text(c,voiceLines[i],cardLeft+16f,top+70f+i*VOICE_STEP,VOICE_SIZE,dim,b=v.phase==VoicePhase.SENT)
-        if(v.phase==VoicePhase.LISTENING || v.phase==VoicePhase.STARTING)text(c,if(v.phase==VoicePhase.STARTING)"2× TAP  cancel" else "TAP  done  ·  2× TAP  cancel",cardLeft+16f,top+height-12f,18f,191,b=true)
+        // The narrow card has room for "cancel" only; a pause still ends listening by itself.
+        if(v.phase==VoicePhase.LISTENING || v.phase==VoicePhase.STARTING)text(c,if(v.phase==VoicePhase.STARTING || cardW<NARROW_CARD)"2× TAP  cancel" else "TAP  done  ·  2× TAP  cancel",cardLeft+16f,top+height-12f,18f,191,b=true)
         if(review) {
             val labels=VOICE_ROWS
             for(i in labels.indices) {
@@ -845,6 +847,8 @@ class HudRenderer(context: Context) {
         private const val LABEL_MINOR = 17f
         const val ALERT_FRESH_MS = 6_000L
         private const val MEDIA_W = 444f
+        /** Cards narrower than this are the trip's corner card (222 wide). */
+        private const val NARROW_CARD = 300f
         private const val VOICE_SIZE = 26f
         private const val VOICE_STEP = 32f
         private const val VOICE_ROW = 44f

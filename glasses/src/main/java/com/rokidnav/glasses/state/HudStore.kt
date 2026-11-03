@@ -139,19 +139,29 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             // No trip, nothing to act on.
             idle(s) && !back->Unit
             key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
-            key==GlassesKey.SWIPE_FORWARD->{mutable.update {it.copy(mapZoom=(it.mapZoom-1).coerceAtLeast(0))};sendAction(GlassesAction(0,ActionType.ZOOM_IN))}
-            key==GlassesKey.SWIPE_BACK->{mutable.update {it.copy(mapZoom=(it.mapZoom+1).coerceAtMost(2))};sendAction(GlassesAction(0,ActionType.ZOOM_OUT))}
+            // On a trip, swipe forward steps the zoom (default, far, close, as the phone's "Map zoom" button) and swipe back
+            // speaks a command: tap is the view and double tap leaves, so one swipe direction was the only free gesture.
+            // A detour offer keeps the screen for itself. Each swipe counts once, however many input paths report it.
+            key==GlassesKey.SWIPE_FORWARD->if(!repeated(key)){mutable.update {it.copy(mapZoom=(it.mapZoom+1)%3)};sendAction(GlassesAction(0,ActionType.CYCLE_ZOOM))}
+            key==GlassesKey.SWIPE_BACK->if(d==null && s.linkConnected && !repeated(key))startVoice(VOICE_COMMAND_ID,key)
             (key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK) && s.navState==NavState.ARRIVED->mutable.update {it.copy(navState=NavState.IDLE)}
             key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK->return false
         }
         return true
     }
     /** Starts a voice reply to card [id], or a command ([VOICE_COMMAND_ID]); shown at once, the phone confirms. */
-    private fun startVoice(id:String) {
-        // The same tap may arrive again by another input path; the voice key guard drops it (see mediaKey).
-        lastMediaKey=GlassesKey.TAP;lastMediaKeyAt=clock()
+    private fun startVoice(id:String,key:GlassesKey=GlassesKey.TAP) {
+        // The same gesture may arrive again by another input path; the voice key guard drops it (see mediaKey).
+        lastMediaKey=key;lastMediaKeyAt=clock()
         sendAction(GlassesAction(0,ActionType.VOICE_START,id))
         mutable.update {it.copy(voice=VoiceState(0,VoicePhase.STARTING,id),voiceAt=clock(),mediaShown=false)}
+    }
+    /** True when [key] is the last accepted gesture arriving again by another input path; otherwise records it (see mediaKey). */
+    private fun repeated(key:GlassesKey):Boolean {
+        val now=clock()
+        if(key==lastMediaKey && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS)return true
+        lastMediaKey=key;lastMediaKeyAt=now
+        return false
     }
     private fun sameOnScreen(a:MediaState?,b:MediaState?)=if(a==null || b==null)a==b else
         a.app==b.app && a.title==b.title && a.artist==b.artist && a.playing==b.playing

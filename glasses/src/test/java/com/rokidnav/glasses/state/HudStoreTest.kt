@@ -183,7 +183,7 @@ class HudStoreTest {
         val hud=HudStore {sent+=it}
         hud.onMessage(media(1));hud.onMessage(com.rokidnav.protocol.NavStateUpdate(2,com.rokidnav.protocol.NavState.ACTIVE))
         hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD)
-        assertEquals(listOf(ActionType.ZOOM_IN),sent.map {it.action})
+        assertEquals(listOf(ActionType.CYCLE_ZOOM),sent.map {it.action})
         assertEquals(HudMode.Map,hud.state.value.mode)
         hud.onMessage(com.rokidnav.protocol.MediaState(3,active=false))
         assertNull(hud.state.value.media)
@@ -327,6 +327,31 @@ class HudStoreTest {
         // A deliberate tap afterwards does start one.
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+    }
+
+    @Test fun onATripSwipeBackSpeaksACommandAndSwipeForwardStepsTheZoom() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(com.rokidnav.protocol.NavStateUpdate(1,com.rokidnav.protocol.NavState.ACTIVE))
+        // Swipe forward, reported by three input paths, steps the zoom once: default to far, then close, then default.
+        hud.onKey(GlassesKey.SWIPE_FORWARD);now+=15;hud.onKey(GlassesKey.SWIPE_FORWARD);now+=40;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(2,hud.state.value.mapZoom)
+        now+=1_000;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(0,hud.state.value.mapZoom)
+        assertEquals(listOf(ActionType.CYCLE_ZOOM,ActionType.CYCLE_ZOOM),sent.map {it.action})
+        // Swipe back, reported twice, starts one command; tap still changes the view.
+        sent.clear();now+=1_000;hud.onKey(GlassesKey.SWIPE_BACK);now+=15;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+        assertEquals(com.rokidnav.protocol.VOICE_COMMAND_ID,sent.single().targetId)
+        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))                 // cancels the command, stays in the app
+        assertEquals(ActionType.VOICE_CANCEL,sent.last().action)
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(HudMode.Map,hud.state.value.mode)
+        // With no command on screen, double tap still leaves the app, and a detour offer keeps swipe back for itself.
+        now+=1_000;assertEquals(false,hud.onKey(GlassesKey.DOUBLE_TAP))
+        hud.onMessage(DetourOffer(2,"d1",300,0,"via A",expiresAtMs=Long.MAX_VALUE))
+        sent.clear();now+=1_000;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
     }
 
     @Test fun doubleTapCancelsACommandAndStaysInTheApp() {
