@@ -112,6 +112,27 @@ class NavSessionCoordinatorTest {
         runCurrent()
         assertEquals(listOf("playPause", "next", "previous"), media.calls)
     }
+    @Test fun openGrokBotActionOpensItAndAnswersWithTheResult() = runTest {
+        val engine = Engine()
+        val link = Link()
+        var problem: String? = null
+        var opened = 0
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents,
+            openGrokBot = { opened++; problem })
+        coordinator.start(); runCurrent()
+        link.incoming.emit(GlassesAction(1, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals(1, opened)
+        assertEquals(VoiceState(0, VoicePhase.SENT, VOICE_COMMAND_ID, "Opening Grok Bot on the phone"), link.sent.filterIsInstance<VoiceState>().last().copy(seq = 0))
+        problem = "Unlock the phone for Grok Bot"
+        link.incoming.emit(GlassesAction(2, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals(VoiceState(0, VoicePhase.FAILED, VOICE_COMMAND_ID, "Unlock the phone for Grok Bot"), link.sent.filterIsInstance<VoiceState>().last().copy(seq = 0))
+        // No opener (tests, a phone without the setup): a reason, not a crash.
+        val bare = Link()
+        val plain = NavSessionCoordinator(backgroundScope, bare, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents)
+        plain.start(); runCurrent()
+        bare.incoming.emit(GlassesAction(3, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals(VoicePhase.FAILED, bare.sent.filterIsInstance<VoiceState>().last().phase)
+    }
     @Test fun messageNumbersStartFromTheGivenCounterStartSoARestartedPhoneCountsHigher() = runTest {
         val engine = Engine()
         val link = Link()

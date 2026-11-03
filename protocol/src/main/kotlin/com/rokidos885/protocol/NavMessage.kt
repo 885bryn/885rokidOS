@@ -219,9 +219,10 @@ data class VoiceState(
 ) : NavMessage
 
 /**
- * [VoiceState.notificationId] and the VOICE_* actions' targetId for a spoken command (tap on the empty idle screen),
- * not a reply to a notification. The same messages carry it: VOICE_START / VOICE_STOP / VOICE_CANCEL, then
- * LISTENING, SENT (text = what was done) or FAILED (text = the reason). Commands have no REVIEW step.
+ * [VoiceState.notificationId] and the actions' targetId for a command, not a reply to a notification. The glasses send
+ * OPEN_GROK_BOT (tap on the empty idle screen, swipe back on a trip); the phone answers SENT (text = what was done) or
+ * FAILED (text = the reason). The older spoken form (VOICE_START / VOICE_STOP / VOICE_CANCEL, then LISTENING) still works
+ * on the phone; commands have no REVIEW step.
  */
 const val VOICE_COMMAND_ID = "voice-command"
 
@@ -272,6 +273,8 @@ data class ResyncRequest(override val seq: Long, val reason: String = "") : NavM
     MEDIA_PLAY_PAUSE, MEDIA_NEXT, MEDIA_PREVIOUS,
     /** Voice reply to the notification in targetId: start / stop listening now / send the text / listen again / give up. */
     VOICE_START, VOICE_STOP, VOICE_SEND, VOICE_REDO, VOICE_CANCEL,
+    /** Start a Grok Bot voice chat on the phone, no speech step; targetId [VOICE_COMMAND_ID]. The phone answers SENT or FAILED. */
+    OPEN_GROK_BOT,
 }
 
 /** Mirrors the Google Navigation SDK maneuver set closely enough to map 1:1 (see NavInfoMapper). */

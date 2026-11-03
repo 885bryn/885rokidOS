@@ -65,7 +65,7 @@ and opens a new session, which installs and opens the bundled APK. Tried once pe
 |---|---|
 | `hello` | glasses app start; carries display size. Phone replies with a full resync. |
 | `resync` | glasses missed something (e.g. incomplete route chunks after 5 s) |
-| `action` | ACCEPT_DETOUR / DISMISS_DETOUR (with offerId), END_NAVIGATION, TOGGLE_VOICE, ZOOM_IN/OUT, SHOW_ALTERNATIVES, TOGGLE_UNITS, CYCLE_BRIGHTNESS, CYCLE_ZOOM, MEDIA_PLAY_PAUSE / MEDIA_NEXT / MEDIA_PREVIOUS (control the phone's active media session), VOICE_START / VOICE_STOP / VOICE_SEND / VOICE_REDO / VOICE_CANCEL (targetId = notification id, or `VOICE_COMMAND_ID` for a spoken command such as "open Grok Bot"; see docs/VOICE.md) |
+| `action` | ACCEPT_DETOUR / DISMISS_DETOUR (with offerId), END_NAVIGATION, TOGGLE_VOICE, ZOOM_IN/OUT, SHOW_ALTERNATIVES, TOGGLE_UNITS, CYCLE_BRIGHTNESS, CYCLE_ZOOM, MEDIA_PLAY_PAUSE / MEDIA_NEXT / MEDIA_PREVIOUS (control the phone's active media session), VOICE_START / VOICE_STOP / VOICE_SEND / VOICE_REDO / VOICE_CANCEL (targetId = notification id, or `VOICE_COMMAND_ID` for the older spoken command), OPEN_GROK_BOT (targetId `VOICE_COMMAND_ID`; the phone starts Grok Bot and answers with a `voice` SENT or FAILED; see docs/VOICE.md) |
 | `input` | raw key name, for logs/calibration only |
 
 ## Resync rule

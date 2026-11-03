@@ -20,7 +20,7 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     replySender:com.rokidos885.phone.voice.ReplySender?=null,
     voiceWork:kotlin.coroutines.CoroutineContext=kotlin.coroutines.EmptyCoroutineContext,
     voiceAudio:((ByteArray)->Unit)?=null,
-    openGrokBot:(()->String?)?=null,
+    private val openGrokBot:(()->String?)?=null,
     // The glasses HUD outlives the phone app and drops any message numbered at or below the last it saw, so a
     // restarted phone must count higher than before: start from the clock (a restart is always later).
     seqStart:Long=System.currentTimeMillis()) {
@@ -218,6 +218,11 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
             ActionType.VOICE_STOP->voice?.stop()
             ActionType.VOICE_SEND->voice?.send(a.targetId)
             ActionType.VOICE_CANCEL->voice?.cancel(a.targetId)
+            ActionType.OPEN_GROK_BOT->{
+                val open=openGrokBot
+                val problem=if(open==null)"Opening apps is not set up" else runCatching {open()}.getOrElse {"Could not open Grok Bot"}
+                link.send(VoiceState(seq.next(),if(problem==null)VoicePhase.SENT else VoicePhase.FAILED,VOICE_COMMAND_ID,problem ?: "Opening Grok Bot on the phone"))
+            }
             ActionType.MEDIA_PLAY_PAUSE->media?.playPause()
             ActionType.MEDIA_NEXT->media?.next()
             ActionType.MEDIA_PREVIOUS->media?.previous()

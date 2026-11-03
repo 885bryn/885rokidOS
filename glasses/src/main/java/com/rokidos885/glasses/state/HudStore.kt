@@ -124,11 +124,11 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             }
             // No trip and the player on screen: tap plays or pauses, swipe skips.
             idleMedia(s) && s.mediaShown && !back->mediaKey(key)
-            // No trip and nothing on screen: tap speaks a command to the phone ("open Grok Bot"). The tap that closed a card
-            // or a voice result, arriving again by another input path, or the touch that woke the glasses, is not one.
+            // No trip and nothing on screen: tap starts Grok Bot on the phone. The tap that closed a card or a voice
+            // result, arriving again by another input path, or the touch that woke the glasses, is not one.
             idle(s) && key==GlassesKey.TAP && s.linkConnected->{
                 val now=clock()
-                if(!(lastMediaKey==key && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS) && now-wokeAt>=MEDIA_KEY_GAP_MS)startVoice(VOICE_COMMAND_ID)
+                if(!(lastMediaKey==key && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS) && now-wokeAt>=MEDIA_KEY_GAP_MS)startVoice(VOICE_COMMAND_ID,action=ActionType.OPEN_GROK_BOT)
             }
             // Music but the player hidden: a swipe brings it up (it must be seen before it is controlled); the same
             // gesture arriving again by another input path is dropped by the media key guard.
@@ -140,20 +140,20 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             idle(s) && !back->Unit
             key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
             // On a trip, swipe forward steps the zoom (default, far, close, as the phone's "Map zoom" button) and swipe back
-            // speaks a command: tap is the view and double tap leaves, so one swipe direction was the only free gesture.
+            // starts Grok Bot: tap is the view and double tap leaves, so one swipe direction was the only free gesture.
             // A detour offer keeps the screen for itself. Each swipe counts once, however many input paths report it.
             key==GlassesKey.SWIPE_FORWARD->if(!repeated(key)){mutable.update {it.copy(mapZoom=(it.mapZoom+1)%3)};sendAction(GlassesAction(0,ActionType.CYCLE_ZOOM))}
-            key==GlassesKey.SWIPE_BACK->if(d==null && s.linkConnected && !repeated(key))startVoice(VOICE_COMMAND_ID,key)
+            key==GlassesKey.SWIPE_BACK->if(d==null && s.linkConnected && !repeated(key))startVoice(VOICE_COMMAND_ID,key,ActionType.OPEN_GROK_BOT)
             (key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK) && s.navState==NavState.ARRIVED->mutable.update {it.copy(navState=NavState.IDLE)}
             key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK->return false
         }
         return true
     }
-    /** Starts a voice reply to card [id], or a command ([VOICE_COMMAND_ID]); shown at once, the phone confirms. */
-    private fun startVoice(id:String,key:GlassesKey=GlassesKey.TAP) {
+    /** Starts a voice reply to card [id], or a command ([VOICE_COMMAND_ID], [action] OPEN_GROK_BOT); shown at once, the phone confirms. */
+    private fun startVoice(id:String,key:GlassesKey=GlassesKey.TAP,action:ActionType=ActionType.VOICE_START) {
         // The same gesture may arrive again by another input path; the voice key guard drops it (see mediaKey).
         lastMediaKey=key;lastMediaKeyAt=clock()
-        sendAction(GlassesAction(0,ActionType.VOICE_START,id))
+        sendAction(GlassesAction(0,action,id))
         mutable.update {it.copy(voice=VoiceState(0,VoicePhase.STARTING,id),voiceAt=clock(),mediaShown=false)}
     }
     /** True when [key] is the last accepted gesture arriving again by another input path; otherwise records it (see mediaKey). */

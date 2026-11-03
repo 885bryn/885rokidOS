@@ -23,7 +23,7 @@ an app on the glasses, which draws its own monochrome HUD.
 - **Touchpad**: on a trip, tap changes the view, swipe forward steps the zoom and swipe back speaks a command.
   Double-tap returns to Rokid home, and reopening the HUD resumes the trip. Gesture map: [docs/nav-review.md](docs/nav-review.md).
 - **Notifications, media and voice**: phone notifications as short cards, music control, voice replies to
-  messages, and the voice command "open Grok Bot" (tap the empty screen, or swipe back on a trip, then speak).
+  messages, and a Grok Bot voice chat (tap the empty screen, or swipe back on a trip).
 - **Auto-install and update**: the phone sends the HUD to the glasses when you connect.
 
 ## How it fits together

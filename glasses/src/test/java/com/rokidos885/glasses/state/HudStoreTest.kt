@@ -285,7 +285,7 @@ class HudStoreTest {
         assertEquals(false,hud.state.value.mediaVisible)
     }
 
-    @Test fun tapOnTheEmptyIdleScreenSpeaksACommandEvenWithMusicPlaying() {
+    @Test fun tapOnTheEmptyIdleScreenStartsGrokBotEvenWithMusicPlaying() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         // No phone link: nothing would answer, so the tap does nothing.
@@ -294,15 +294,13 @@ class HudStoreTest {
         hud.onConnection(true);hud.onMessage(media(1))
         // Music plays, the player is hidden: a tap (reported twice) starts one command, not the player.
         hud.onKey(GlassesKey.TAP);now+=15;hud.onKey(GlassesKey.TAP)
-        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+        assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
         assertEquals(com.rokidos885.protocol.VOICE_COMMAND_ID,sent.single().targetId)
         assertEquals(com.rokidos885.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
         assertEquals(false,hud.state.value.mediaVisible)
-        // Then it works like a reply: tap stops listening, the result shows and goes away.
-        hud.onMessage(com.rokidos885.protocol.VoiceState(2,com.rokidos885.protocol.VoicePhase.LISTENING,com.rokidos885.protocol.VOICE_COMMAND_ID,"open"))
-        now+=1_000;hud.onKey(GlassesKey.TAP)
-        assertEquals(ActionType.VOICE_STOP,sent.last().action)
+        // No speech step: the phone's answer shows and goes away.
         hud.onMessage(com.rokidos885.protocol.VoiceState(3,com.rokidos885.protocol.VoicePhase.SENT,com.rokidos885.protocol.VOICE_COMMAND_ID,"Opening Grok Bot on the phone"))
+        assertEquals(com.rokidos885.protocol.VoicePhase.SENT,hud.state.value.voice?.phase)
         now+=HudStore.REPLY_RESULT_MS;hud.tick()
         assertNull(hud.state.value.voice)
         // On a trip a tap still changes the view, never starts a command.
@@ -326,7 +324,7 @@ class HudStoreTest {
         assertEquals(emptyList<ActionType>(),sent.map {it.action})
         // A deliberate tap afterwards does start one.
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
-        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+        assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
     }
 
     @Test fun wakingWithMusicKeepsPlayerHiddenAndNextTapStartsCommand() {
@@ -341,16 +339,16 @@ class HudStoreTest {
         assertNull(hud.state.value.voice)
         assertEquals(emptyList<ActionType>(),sent.map {it.action})
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
-        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+        assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
         assertEquals(com.rokidos885.protocol.VOICE_COMMAND_ID,sent.single().targetId)
         assertEquals(false,hud.state.value.mediaVisible)
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.DOUBLE_TAP)
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(true,hud.state.value.mediaVisible)
-        assertEquals(listOf(ActionType.VOICE_START,ActionType.VOICE_CANCEL),sent.map {it.action})
+        assertEquals(listOf(ActionType.OPEN_GROK_BOT,ActionType.VOICE_CANCEL),sent.map {it.action})
     }
 
-    @Test fun onATripSwipeBackSpeaksACommandAndSwipeForwardStepsTheZoom() {
+    @Test fun onATripSwipeBackStartsGrokBotAndSwipeForwardStepsTheZoom() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onConnection(true);hud.onMessage(com.rokidos885.protocol.NavStateUpdate(1,com.rokidos885.protocol.NavState.ACTIVE))
@@ -362,7 +360,7 @@ class HudStoreTest {
         assertEquals(listOf(ActionType.CYCLE_ZOOM,ActionType.CYCLE_ZOOM),sent.map {it.action})
         // Swipe back, reported twice, starts one command; tap still changes the view.
         sent.clear();now+=1_000;hud.onKey(GlassesKey.SWIPE_BACK);now+=15;hud.onKey(GlassesKey.SWIPE_BACK)
-        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+        assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
         assertEquals(com.rokidos885.protocol.VOICE_COMMAND_ID,sent.single().targetId)
         assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))                 // cancels the command, stays in the app
         assertEquals(ActionType.VOICE_CANCEL,sent.last().action)

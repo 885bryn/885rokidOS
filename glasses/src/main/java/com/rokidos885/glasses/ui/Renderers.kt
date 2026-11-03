@@ -276,8 +276,8 @@ class HudRenderer(context: Context) {
             next.voice?.let { v ->
                 if(v!==old.voice || n!==old.notification || moved) {
                     val command=v.notificationId==VOICE_COMMAND_ID
-                    // On a trip the corner card is narrow (the turn stays visible to its left): a shorter header.
-                    voiceHeader=ellipsize(if(command)(if(cardW<NARROW_CARD)"COMMAND" else "VOICE COMMAND") else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
+                    // The only command is the Grok Bot start (tap, no speech); the header fits the narrow trip card too.
+                    voiceHeader=ellipsize(if(command)"GROK BOT" else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
                     // A command's result says what was done ("Opening Grok Bot on the phone").
                     val shown=when(v.phase) { VoicePhase.SENT->v.text.ifBlank{"Sent"}; VoicePhase.STARTING->"Starting…"
                         VoicePhase.LISTENING->v.text.ifBlank{if(command)"Say \"open Grok Bot\"" else "Speak now…"}; else->v.text }
