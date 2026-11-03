@@ -64,7 +64,7 @@ class MainActivity:AppCompatActivity() {
             store.onMessage(com.rokidos885.protocol.NavStateUpdate(n,com.rokidos885.protocol.NavState.IDLE))
             if(scene=="media") {
                 store.onMessage(com.rokidos885.protocol.MediaState(n+1,true,"Spotify","Midnight City, a very long track title that wraps","M83",true,0,0))
-                store.onUserWake()
+                store.onKey(GlassesKey.SWIPE_FORWARD)
             } else if(scene=="command") {
                 store.onMessage(com.rokidos885.protocol.VoiceState(n+1,com.rokidos885.protocol.VoicePhase.LISTENING,com.rokidos885.protocol.VOICE_COMMAND_ID,"open grok bot"))
             } else {

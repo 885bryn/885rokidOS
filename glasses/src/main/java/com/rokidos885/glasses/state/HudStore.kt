@@ -23,8 +23,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     private var arrivedAt=0L
     private var wokeAt=Long.MIN_VALUE/2
     private fun resultOver(s:HudState,now:Long)=s.voice!=null && (s.voice.phase==VoicePhase.SENT || s.voice.phase==VoicePhase.FAILED) && now-s.voiceAt>=REPLY_RESULT_MS
-    /** The HUD came to the front. If no card caused that, the user did (a touch woke the glasses): show the player. */
-    fun onUserWake(){wokeAt=clock();mutable.update {if(it.notification==null)it.copy(mediaShown=true,mediaShownAt=clock()) else it}}
+    /** Ignore the waking touch without revealing the player; a swipe reveals it. */
+    fun onUserWake(){wokeAt=clock()}
     /** A new phone session began (HelloRequest): the phone may have restarted and count from a lower number. */
     fun resetSequence(){lastSeq=-1L}
     fun onConnection(connected:Boolean){mutable.update {it.copy(linkConnected=connected)}}

@@ -171,7 +171,7 @@ class HudStoreTest {
     @Test fun idleMediaScreenTapsPlayPauseAndSwipesSkip() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
-        hud.onMessage(media(1));hud.onUserWake()
+        hud.onMessage(media(1));hud.onKey(GlassesKey.SWIPE_BACK)
         hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD);hud.onKey(GlassesKey.SWIPE_BACK)
         assertEquals(listOf(ActionType.MEDIA_PLAY_PAUSE,ActionType.MEDIA_NEXT,ActionType.MEDIA_PREVIOUS),sent.map {it.action})
         // The icon follows the tap at once; the view mode does not change.
@@ -208,7 +208,7 @@ class HudStoreTest {
     @Test fun oneGestureReportedByThreeInputPathsSendsOneMediaAction() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
-        hud.onMessage(media(1));hud.onUserWake()
+        hud.onMessage(media(1));hud.onKey(GlassesKey.SWIPE_BACK)
         // Broadcast, key event and touch for one swipe, within a few ms of each other.
         hud.onKey(GlassesKey.SWIPE_FORWARD);now+=15;hud.onKey(GlassesKey.SWIPE_FORWARD);now+=40;hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(listOf(ActionType.MEDIA_NEXT),sent.map {it.action})
@@ -257,7 +257,7 @@ class HudStoreTest {
         hud.onMessage(media(1))
         assertEquals(false,hud.state.value.mediaVisible)
         // A card arrives while the player is up: the player goes away and does not return after the card.
-        hud.onUserWake()
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(true,hud.state.value.mediaVisible)
         hud.onMessage(com.rokidos885.protocol.PhoneNotification(2,"n1","Messages","Sam","Hi"))
         assertEquals(false,hud.state.value.mediaVisible)
@@ -327,6 +327,27 @@ class HudStoreTest {
         // A deliberate tap afterwards does start one.
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+    }
+
+    @Test fun wakingWithMusicKeepsPlayerHiddenAndNextTapStartsCommand() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(media(1))
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(true,hud.state.value.mediaVisible)
+        now+=HudStore.MEDIA_SHOW_MS;hud.tick()
+        hud.onUserWake();hud.onKey(GlassesKey.TAP)
+        assertEquals(false,hud.state.value.mediaVisible)
+        assertNull(hud.state.value.voice)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.VOICE_START),sent.map {it.action})
+        assertEquals(com.rokidos885.protocol.VOICE_COMMAND_ID,sent.single().targetId)
+        assertEquals(false,hud.state.value.mediaVisible)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.DOUBLE_TAP)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(true,hud.state.value.mediaVisible)
+        assertEquals(listOf(ActionType.VOICE_START,ActionType.VOICE_CANCEL),sent.map {it.action})
     }
 
     @Test fun onATripSwipeBackSpeaksACommandAndSwipeForwardStepsTheZoom() {
