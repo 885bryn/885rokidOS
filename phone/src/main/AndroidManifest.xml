@@ -64,6 +64,20 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Locks the phone again after that Grok Bot start. Active only after the user turns it on in Accessibility. -->
+        <service
+            android:name=".voice.ScreenLockService"
+            android:exported="false"
+            android:label="885rokidOS screen lock"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/screen_lock_service" />
+        </service>
+
         <!-- Receives the Navigation SDK turn-by-turn feed (NavInfo). -->
         <service
             android:name=".nav.NavUpdatesService"

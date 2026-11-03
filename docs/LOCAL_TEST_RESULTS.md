@@ -124,3 +124,18 @@ ADB at 23:52: `dumpsys trust` shows trustState=TRUSTED, deviceLocked=0, GoogleTr
 | Glasses command, phone locked in pocket, Smart Lock active | Grok Bot voice chat starts in the glasses | User confirmed it works | Pass, user report |
 
 Not tested: the "Unlock the phone for Grok Bot" message with Smart Lock off.
+
+## Grok Bot by tap — built and installed
+
+Glasses send `OPEN_GROK_BOT` on an idle tap or a trip swipe back; no speech step. Full verify command passed: 134 tests, zero failures. Phone app (with bundled HUD) installed.
+
+| Tap trigger | One tap starts a Grok Bot voice chat in the glasses | User confirmed | Pass, user report |
+| Second tap during a chat | Not designed | Ends the Grok Bot chat (user report). Likely Grok Bot treats a second `ACTION_ASSIST` as a toggle; not verified in logs | Observed, kept |
+| Screen after start | Not built yet | Phone screen stays on | Expected; no screen-off code exists |
+| Power button during a Grok Bot chat | Chat keeps running with the screen off | User confirmed | Pass, user report |
+
+## Screen lock after Grok Bot start — built and installed
+
+`ScreenLockService` (accessibility service, `GLOBAL_ACTION_LOCK_SCREEN`) locks the phone after `GrokBotUnlockActivity` starts Grok Bot from the lock screen: once any recording is active plus 1 s, or after 8 s. Verify command passed; phone app installed. User enabled restricted settings and the service.
+
+| Tap from pocket, phone locked, Smart Lock and service on | Grok Bot talks in the glasses; screen turns off | User confirmed | Pass, user report |

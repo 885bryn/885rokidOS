@@ -17,6 +17,8 @@ class GrokBotUnlockActivity : Activity() {
         getSystemService(KeyguardManager::class.java).requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
             override fun onDismissSucceeded() {
                 GrokBot.intent(this@GrokBotUnlockActivity)?.let { startActivity(it) }
+                // The phone was on the lock screen (in a pocket): lock it again once Grok Bot listens.
+                ScreenLockService.lockAfterGrokBotStarts(this@GrokBotUnlockActivity)
                 finish()
             }
             override fun onDismissError() = finish()

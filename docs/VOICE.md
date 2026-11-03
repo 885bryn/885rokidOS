@@ -53,17 +53,21 @@ recording "hello this is the test" came back exactly.
 
 Message text is never logged by the real flow.
 
-## Voice command "open Grok Bot" (built 2026-11-02)
+## Grok Bot by tap (built 2026-11-02; the spoken command came first)
 
 1. With no trip and nothing on the screen (no card, no player), **tap**. On a trip, **swipe back** (swipe forward steps the zoom).
-   The glasses show "VOICE COMMAND" ("COMMAND" on the narrow trip card).
-2. Say "open Grok Bot". The same pipeline listens (`VoiceReplyController`, id `VOICE_COMMAND_ID`) and stops on a pause or a tap.
-3. There is no check step. `VoiceCommands.opensGrokBot` matches "open" right before "Grok" or a likely misspelling of it (one
-   letter away, or rock / brock / crock; "Bot" may follow or be dropped), and `GrokBot.open` starts a Grok Bot voice chat on the phone (`ACTION_ASSIST`; the app's home screen if
-   that is missing). The voice chat uses the glasses mic and speaker. On the lock screen, `GrokBotUnlockActivity` turns the screen on
-   and removes the lock screen first; this works only when Smart Lock keeps the phone unlocked, else the glasses say "Unlock
-   the phone for Grok Bot". The glasses show "Opening Grok Bot on the phone" (`SENT`) or the reason
-   it did not work (`FAILED`) for 2 s.
+   The glasses send `OPEN_GROK_BOT` (no speech step) and show a "GROK BOT" card.
+2. `GrokBot.open` starts a Grok Bot voice chat on the phone (`ACTION_ASSIST`; the app's home screen if that is missing). The
+   voice chat uses the glasses mic and speaker. On the lock screen, `GrokBotUnlockActivity` turns the screen on and removes the
+   lock screen first; this works only when Smart Lock keeps the phone unlocked, else the glasses say "Unlock the phone for Grok Bot".
+3. The glasses show "Opening Grok Bot on the phone" (`SENT`) or the reason it did not work (`FAILED`) for 2 s.
+4. After a start from the lock screen, `ScreenLockService` locks the phone again once Grok Bot records (at most 8 s), so
+   the screen goes off in the pocket. The chat keeps running. Turn the service on in Settings, Accessibility, "885rokidOS
+   screen lock" (Android 13+: first allow restricted settings in the 885rokidOS app info). Without it the screen stays on.
+5. A second tap during a chat ends it (Grok Bot's own behavior for a second `ACTION_ASSIST`; not designed here).
+
+The spoken form ("open Grok Bot" after `VOICE_START` with `VOICE_COMMAND_ID`, matched by `VoiceCommands.opensGrokBot`) still works
+on the phone, but the HUD no longer sends it.
 
 Phone setup: allow **Display over other apps** for 885rokidOS (Settings, Apps, 885rokidOS). Without it, Android 10+ does not let
 a background app open another app; the glasses then say so. The package is `GrokBot.PACKAGE` (`ai.x.grok.bot`, the "Grok Bot"
