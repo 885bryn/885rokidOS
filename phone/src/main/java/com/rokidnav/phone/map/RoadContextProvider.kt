@@ -85,7 +85,7 @@ class RoadContextProvider(private val directory:File,private val http:OkHttpClie
         private const val MAX_TILE_BYTES=4_000_000L
         private const val TILE_MAX_AGE_MS=7*86_400_000L
         private const val TILEJSON_URL="https://tiles.openfreemap.org/planet"
-        private const val USER_AGENT="RokidNavigation/0.2 (personal navigation HUD)"
+        private const val USER_AGENT="885rokidOS/0.2 (personal navigation HUD)"
         private val cacheFormat=ListSerializer(ContextRoad.serializer())
 
         private fun writeCache(roads:List<TileRoad>)=Json.encodeToString(cacheFormat,roads.map {ContextRoad(PolylineCodec.encode(it.points),it.name,it.major)})

@@ -33,7 +33,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RokidNavigation"
+rootProject.name = "885rokidOS"
 
 include(":protocol")
 include(":phone")

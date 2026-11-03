@@ -100,7 +100,7 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         }
         scope.launch {link.incoming.collect {when(it){is GlassesHello,is ResyncRequest->resync();is GlassesAction->action(it);else->Unit}}}
         scope.launch {link.state.collect {if(it==LinkState.Ready){applySettings(settings?.state?.value ?: preferences);resync()}}}
-        // Rokid Nav is more than navigation (notifications, later music and calls), so the session stays
+        // 885rokidOS is more than navigation (notifications, later music and calls), so the session stays
         // open with or without a trip. It opens right after authorization, when the phone app comes to the
         // front (onAppOpened) and when a trip starts. A user Disconnect is respected until one of those.
         scope.launch {

@@ -88,7 +88,7 @@ class MainActivity:ComponentActivity() {
                     2->SettingsScreen(app)
                     else->SetupScreen(app.glassesLink,events,
                     authorize={app.glassesLink.authorize(this@MainActivity)},connect=app.glassesLink::connect,installWithRokid={installWithHiRokidOpen()},
-                    openRokid={openRokid()},test={sendHudTest()},voiceTest={voiceTest()},accuracySet={accuracySet()},voiceStatus=voiceStatus.value,voiceBusy=voiceBusy.value,export={exportHud.launch("RokidNav-HUD.apk")},preview={startActivity(Intent().setClassName(BuildConfig.GLASSES_PACKAGE,BuildConfig.GLASSES_ACTIVITY).putExtra("demo",true).putExtra("phonePreview",true))})
+                    openRokid={openRokid()},test={sendHudTest()},voiceTest={voiceTest()},accuracySet={accuracySet()},voiceStatus=voiceStatus.value,voiceBusy=voiceBusy.value,export={exportHud.launch("885rokidOS-HUD.apk")},preview={startActivity(Intent().setClassName(BuildConfig.GLASSES_PACKAGE,BuildConfig.GLASSES_ACTIVITY).putExtra("demo",true).putExtra("phonePreview",true))})
                     }
                     }
                 }
