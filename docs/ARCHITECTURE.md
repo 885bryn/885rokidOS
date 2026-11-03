@@ -137,7 +137,7 @@ Dual monochrome green micro-LED waveguides, ~480×398 per eye (one source says 6
   management. Its **+ Device** button opens Add device even when already connected; that screen
   alone is not evidence of missing pairing. The SDK reports `GLASSES_APP_INSTALL_FAILED`.
   The wrapper preserves `onConnectResult`'s error across the following `CONNECT_FAILED` close callback.
-  Only token-free lifecycle metadata is logged under `RokidNavLink`.
+  Only token-free lifecycle metadata is logged under `885rokidOSLink`.
 - `client-l:1.1.2` opens the APK itself with `ParcelFileDescriptor.open(..., MODE_READ_ONLY)` and
   calls Hi Rokid's `uploadAndInstallApk`; it does not ask Hi Rokid to open the private path directly.
   Confirmed in `ExternalAppClient.appUploadAndInstall` bytecode. Changing to broad storage access

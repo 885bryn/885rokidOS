@@ -1,6 +1,6 @@
 # Phone ↔ Glasses protocol (v1)
 
-Source of truth: `protocol/src/main/kotlin/com/rokidnav/protocol/NavMessage.kt`. Keep this doc in sync.
+Source of truth: `protocol/src/main/kotlin/com/rokidos885/protocol/NavMessage.kt`. Keep this doc in sync.
 
 ## Transport
 | Direction | Phone (CXR-L) | Glasses (CXR-S) | Channel key |

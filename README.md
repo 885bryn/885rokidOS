@@ -1,6 +1,6 @@
 # 885rokidOS
 
-*(formerly Rokid Navigation; repository: [github.com/885bryn/885rokidOS](https://github.com/885bryn/885rokidOS). The `com.rokidnav.*` package ids keep the old name on purpose, because changing a package id breaks the installed apps, the Rokid link and the Maps API key restriction. Other code names that keep it: the `RokidNavApp` class and the `RokidNav*` log tags.)*
+*(formerly Rokid Navigation, package ids `com.rokidnav.*`; repository: [github.com/885bryn/885rokidOS](https://github.com/885bryn/885rokidOS). Since 2026-11-02 the apps are `com.rokidos885.phone` and `com.rokidos885.glasses`, and logcat tags start with `885rokidOS` (for example `885rokidOSLink`). They install as new apps: remove the old `com.rokidnav.*` apps from the phone and the glasses, add the new phone package to the Google API key restriction, and authorize the glasses again. Settings start fresh.)*
 
 A Google-Maps-style navigation HUD for **Rokid Glasses**. You pick a destination and route on your
 Android phone. The phone runs Google's turn-by-turn guidance and streams compact navigation data to

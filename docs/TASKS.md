@@ -106,7 +106,7 @@ HUD delivery, native orientation, and tap return events have been checked on har
 - [x] `WzSabreCameraProvider`: ExCam metadata, XZ parsing, last-good disk cache, route filtering.
 - [x] `WzSabrePoliceProvider`: documented SABRE handshake/fetch, batch assembly, expiry, cancellation.
 - [ ] Optional later: other incident categories. No TomTom key is needed for the selected WzSabre police/camera scope.
-- [ ] Validate WzSabre plugin exchange on a phone with `com.rokidnav.phone`; missing-plugin / timeout UX and settings toggle in M8.
+- [ ] Validate WzSabre plugin exchange on a phone with `com.rokidos885.phone`; missing-plugin / timeout UX and settings toggle in M8.
 - [x] Police/camera/jam/closure glyphs and generic hazard fallback in both map sizes.
 - [x] User selected https://wzsabre.rocks/ for police and speed cameras on 2026-10-17; replaces OSM camera plan.
 - **Accept:** mock provider police alert counts down and clears in demo + real drive.

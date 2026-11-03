@@ -29,13 +29,13 @@ recording "hello this is the test" came back exactly.
 3. **Model.** Download `sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8.tar.bz2` from
    `https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/`, unpack it, and copy `encoder.int8.onnx`,
    `decoder.int8.onnx`, `joiner.int8.onnx` and `tokens.txt` to the phone:
-   `adb push <file> /sdcard/Android/data/com.rokidnav.phone/files/stt/sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8/`
+   `adb push <file> /sdcard/Android/data/com.rokidos885.phone/files/stt/sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8/`
    (on Windows Git Bash set `MSYS_NO_PATHCONV=1` first). An in-app download is not built yet.
 
 ## Debug tools
 
 - Glasses tab → "Voice test (speak for 6 s)" (debug builds): records, shows loudness and the text.
-- `adb shell am broadcast -n com.rokidnav.phone/com.rokidnav.phone.debug.VoiceReplayReceiver` transcribes the saved
+- `adb shell am broadcast -n com.rokidos885.phone/com.rokidos885.phone.debug.VoiceReplayReceiver` transcribes the saved
   recording again (`files/voice-spike.pcm` in the app's private folder). Debug builds only.
 
 ## The reply flow (built 2026-11-01)

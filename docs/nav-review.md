@@ -169,7 +169,7 @@ phone: VoiceReplyController.start ─► glasses microphone + sherpa-onnx (as fo
 |---|---|
 | Double tap closes a card; no hidden view/zoom changes without a trip | `glasses/.../state/HudStore.kt`, `HudStoreTest.kt`, `MainActivity.kt` (debug `previewExpanded` now sets the view directly) |
 | Speech engine load errors report FAILED instead of crashing | `phone/.../voice/VoiceReplyController.kt`, `VoiceReplyControllerTest.kt` |
-| Voice command "open Grok Bot" | `protocol/.../NavMessage.kt`, `docs/PROTOCOL.md`; glasses `HudStore.kt`, `Renderers.kt` (card without a notification, "VOICE COMMAND" header, player hidden under it), `MainActivity.kt` (screen kept on while voice runs; debug scene `command`); phone `VoiceCommands.kt`, `GrokBot.kt`, `VoiceReplyController.kt`, `NavSessionCoordinator.kt`, `RokidNavApp.kt`, `AndroidManifest.xml`; tests `VoiceCommandsTest.kt`, `VoiceReplyControllerTest.kt`, `HudStoreTest.kt` |
+| Voice command "open Grok Bot" | `protocol/.../NavMessage.kt`, `docs/PROTOCOL.md`; glasses `HudStore.kt`, `Renderers.kt` (card without a notification, "VOICE COMMAND" header, player hidden under it), `MainActivity.kt` (screen kept on while voice runs; debug scene `command`); phone `VoiceCommands.kt`, `GrokBot.kt`, `VoiceReplyController.kt`, `NavSessionCoordinator.kt`, `RokidOs885App.kt`, `AndroidManifest.xml`; tests `VoiceCommandsTest.kt`, `VoiceReplyControllerTest.kt`, `HudStoreTest.kt` |
 | Misspellings of "Grok" right after "open" count | `phone/.../voice/VoiceCommands.kt`, `VoiceCommandsTest.kt` |
 | Command on a trip: swipe back; swipe forward steps the zoom | `glasses/.../state/HudStore.kt`, `Renderers.kt` (short header and hint on the narrow trip card), `HudStoreTest.kt` |
 | One hint style | `Renderers.kt` (corner detour) |
@@ -226,4 +226,4 @@ Tests:
     left. Say "open Grok Bot". Then **swipe forward** a few times: the zoom steps default → far → close → default, one step
     per swipe. Tap still changes the view; double tap still leaves the app. With a faster-route offer on screen, swipe back
     does nothing.
-12. Debug preview without a phone: `adb shell am start -n com.rokidnav.glasses/.MainActivity --es previewScene command`.
+12. Debug preview without a phone: `adb shell am start -n com.rokidos885.glasses/.MainActivity --es previewScene command`.
