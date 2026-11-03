@@ -59,7 +59,8 @@ Message text is never logged by the real flow.
    The glasses show "VOICE COMMAND" ("COMMAND" on the narrow trip card).
 2. Say "open Grok Bot". The same pipeline listens (`VoiceReplyController`, id `VOICE_COMMAND_ID`) and stops on a pause or a tap.
 3. There is no check step. `VoiceCommands.opensGrokBot` matches "open" right before "Grok" or a likely misspelling of it (one
-   letter away, or rock / brock / crock; "Bot" may follow or be dropped), and `GrokBot.open` starts the app on the phone. The glasses show "Opening Grok Bot on the phone" (`SENT`) or the reason
+   letter away, or rock / brock / crock; "Bot" may follow or be dropped), and `GrokBot.open` starts a Grok Bot voice chat on the phone (`ACTION_ASSIST`; the app's home screen if
+   that is missing). The voice chat uses the glasses mic and speaker, but only with the phone unlocked. The glasses show "Opening Grok Bot on the phone" (`SENT`) or the reason
    it did not work (`FAILED`) for 2 s.
 
 Phone setup: allow **Display over other apps** for 885rokidOS (Settings, Apps, 885rokidOS). Without it, Android 10+ does not let
