@@ -112,3 +112,15 @@ Result: `ACTION_ASSIST` sent to `ai.x.grok.bot` starts a voice chat with glasses
 `GrokBot.open` now sends `ACTION_ASSIST` with package `ai.x.grok.bot`; the launch intent stays as a fallback. Full verify command passed (BUILD SUCCESSFUL, both debug APKs). Phone app installed.
 
 | Glasses command, phone unlocked | Tap, say "open Grok Bot"; voice chat starts in the glasses | User confirmed it works | Pass, user report |
+
+| Smart Lock (Extend Unlock), phone on lock screen, glasses command | Grok Bot voice chat starts | Glasses showed "Opening Grok Bot on the phone"; phone stayed on the lock screen; no voice chat | Fail, user report |
+
+ADB at 23:52: `dumpsys trust` shows trustState=TRUSTED, deviceLocked=0, GoogleTrustAgent "Kept unlocked by Extend Unlock". So the device is not locked, but the keyguard still covers the Grok Bot activity. Nothing dismisses the keyguard.
+
+## Lock screen dismiss before Grok Bot — built and phone installed
+
+`GrokBot.open` now starts `GrokBotUnlockActivity` when the keyguard shows but the device is not locked (Smart Lock). The activity turns the screen on, calls `requestDismissKeyguard`, then starts Grok Bot with `ACTION_ASSIST`. A really locked device returns "Unlock the phone for Grok Bot". Full verify command passed; phone app installed.
+
+| Glasses command, phone locked in pocket, Smart Lock active | Grok Bot voice chat starts in the glasses | User confirmed it works | Pass, user report |
+
+Not tested: the "Unlock the phone for Grok Bot" message with Smart Lock off.

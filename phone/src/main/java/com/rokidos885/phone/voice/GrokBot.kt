@@ -1,6 +1,7 @@
 package com.rokidos885.phone.voice
 
 import android.app.ActivityManager
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -12,19 +13,31 @@ object GrokBot {
 
     /** Null when Android was asked to open Grok Bot, otherwise the reason it was not (short: the glasses show it). */
     fun open(context: Context): String? {
-        // ACTION_ASSIST starts a voice chat at once (Grok Bot 1.19.0, AssistTrampolineActivity); it uses the glasses mic and
-        // speaker when their call audio (SCO) is up. Only with the phone unlocked: behind the keyguard it stays hidden
-        // (tested 2026-11-02, docs/LOCAL_TEST_RESULTS.md). Older versions without it get the home screen.
-        // Both need the package in the manifest's <queries> (Android 11+ package visibility), or they always resolve null.
-        val assist = Intent(Intent.ACTION_ASSIST).setPackage(PACKAGE)
-        val intent = (if (assist.resolveActivity(context.packageManager) != null) assist else null)
-            ?: context.packageManager.getLaunchIntentForPackage(PACKAGE) ?: return "Grok Bot is not installed on the phone"
+        val intent = intent(context) ?: return "Grok Bot is not installed on the phone"
         // Android 10+ ignores activity starts from an app in the background (the usual case: phone in a pocket). The user's
         // "Display over other apps" grant lifts that. Without it, only an app on screen may start another one.
         if (!Settings.canDrawOverlays(context) && !onScreen()) return "Allow 885rokidOS to display over other apps"
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        // Behind the keyguard Grok Bot stays hidden and never listens. With Smart Lock the keyguard can go without a PIN;
+        // when the device is really locked, do not open the PIN screen in a pocket.
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        if (keyguard.isKeyguardLocked) {
+            if (keyguard.isDeviceLocked) return "Unlock the phone for Grok Bot"
+            context.startActivity(Intent(context, GrokBotUnlockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return null
+        }
         context.startActivity(intent)
         return null
+    }
+
+    /** The Grok Bot start, or null when Grok Bot is not installed. */
+    fun intent(context: Context): Intent? {
+        // ACTION_ASSIST starts a voice chat at once (Grok Bot 1.19.0, AssistTrampolineActivity); it uses the glasses mic and
+        // speaker when their call audio (SCO) is up (tested 2026-11-02, docs/LOCAL_TEST_RESULTS.md). Older versions without
+        // it get the home screen. Both need the package in the manifest's <queries> (Android 11+ package visibility).
+        val assist = Intent(Intent.ACTION_ASSIST).setPackage(PACKAGE)
+        val intent = (if (assist.resolveActivity(context.packageManager) != null) assist else null)
+            ?: context.packageManager.getLaunchIntentForPackage(PACKAGE) ?: return null
+        return intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
     }
 
     private fun onScreen(): Boolean {

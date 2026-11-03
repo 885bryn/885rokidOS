@@ -56,6 +56,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Voice command "open Grok Bot" with the phone on the lock screen: removes it, then starts Grok Bot. -->
+        <activity
+            android:name=".voice.GrokBotUnlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Receives the Navigation SDK turn-by-turn feed (NavInfo). -->
         <service
             android:name=".nav.NavUpdatesService"
