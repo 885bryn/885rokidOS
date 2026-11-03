@@ -3,8 +3,8 @@
 Result first:
 - The gesture scheme is mostly sound. It has one clear model: **tap acts, swipe moves or skips, double tap goes back**.
   Four places broke that model or did things the user could not see. Three of them are fixed.
-- A new **voice command** opens the Grok Bot app on the phone. **Tap the empty idle screen**, say "open Grok Bot". It reuses the voice-reply
-  pipeline (glasses microphone → offline sherpa-onnx on the phone). On the phone, it needs one grant: **Display over other apps**.
+- A new **voice command** opens the Grok Bot app on the phone. **Tap the empty idle screen** (on a trip: **swipe back**), say
+  "open Grok Bot". It reuses the voice-reply pipeline (glasses microphone → offline sherpa-onnx on the phone). On the phone, it needs one grant: **Display over other apps**.
 - Nothing here ran on real glasses or a real phone. See "What to test on the hardware".
 
 ## 1. How a gesture reaches the HUD
@@ -50,7 +50,7 @@ Screens close on their own: card after 6–15 s, player after 10 s, arrival afte
 What works well:
 - **One meaning per gesture.** Tap acts, swipe moves or skips, double tap goes back. The voice reply follows this exactly.
 - **Hints say what a tap does** where it matters: "TAP reply by voice", "TAP done · 2× TAP cancel", "2× TAP keep",
-  "2× TAP to close now" (`ui/Renderers.kt:775`, `:796`, `:744`, `:824`).
+  "2× TAP to close now" (`ui/Renderers.kt:776`, `:798`, `:745`, `:826`).
 - **No conflict with Rokid system gestures.** Touch and hold stays with Rokid AI, and the camera button stays with the camera.
 - **Driver safety.** On a trip, cards are glances only (`HudState.replyAvailable`).
 - **Duplicate input is handled.** The 600 ms guard and the 700 ms back guard stop one gesture from acting twice.
@@ -76,21 +76,34 @@ Problems found (bold rows in the table above):
 
 ### 4.1 Which gesture owns it
 
-**Tap on the empty idle screen** (no trip, no card, no player, phone connected): `state/HudStore.kt:129`.
+- **No trip: tap on the empty screen** (no card, no player, phone connected): `state/HudStore.kt:129`.
+- **On a trip: swipe back** (phone connected, no detour offer on screen): `state/HudStore.kt:146`.
 
-Why this gesture:
+Why tap without a trip:
 - Long press belongs to Rokid AI, the camera button is ignored, and the glasses deliver no two-finger tap.
 - Double tap is "back / leave", and the Home decision (option A or B, `docs/INTERACTION.md`) is still open.
 - Swipe means "move". A tap that starts something is the same as "TAP reply by voice" on a card.
 - On the empty screen, tap had only a hidden effect (problem 2). It was free.
-- Not on a trip: tap there changes the view, and a driver must not start a dialog by accident (rule 9).
 
 The cost: with music, the **first tap on the black screen is now the command**, not "show the player". **Swipe** shows the
 player (then tap pauses, as before). While the player is on screen, tap is still play/pause, so the command is available again
-10 s after the last touch. If this is the wrong trade-off, see open question 1.
+10 s after the last touch. Bryan kept this (open question 1).
 
-Guards against accidental starts (`state/HudStore.kt:129`): a repeat of the tap that closed a card or a voice result (600 ms),
-the touch that woke the glasses (600 ms after `onUserWake`), and no phone link (nothing would answer).
+Why swipe back on a trip (Bryan asked for the command on a trip too, open question 4). Every trip gesture had a job:
+- **Tap** cycles the three views. It is the trip's main gesture, so it stays.
+- **Double tap** leaves the app (the trip continues). Taking it would leave no way out of the app during a trip.
+- **Long press** is Rokid AI and must not be taken.
+- **Swipe forward / back** zoomed in and out over three levels. This was the cheapest to give up. The map already zooms
+  itself to frame the next turns, and the phone has a "Map zoom" button that steps through the levels in a loop. So
+  **swipe forward now steps the zoom the same way** (default → far → close → default, `CYCLE_ZOOM`, `:145`), and
+  **swipe back is free for the command**. The cost: to zoom out from "close" takes two swipes instead of one.
+- Driver safety: a swipe is a deliberate gesture, and an accidental start costs little. The card waits for speech, ends on
+  silence ("Heard nothing"), and sends nothing. The card takes the narrow right corner in the corner view, so the turn stays
+  visible on the left. A detour offer keeps swipe back for itself (nothing happens), so the offer is never covered.
+
+Guards against accidental starts (`state/HudStore.kt:129`, `:146`, `:160`): a repeat of the gesture by another input path
+(600 ms), including the tap that closed a card or a voice result; the touch that woke the glasses (600 ms after `onUserWake`);
+and no phone link (nothing would answer). Swipe forward on a trip uses the same repeat guard, so one swipe steps the zoom once.
 
 ### 4.2 Gesture map after this change
 
@@ -98,17 +111,19 @@ Changed rows only (line numbers: `state/HudStore.kt` now):
 
 | Screen / state | Tap | Swipe | Double tap |
 |---|---|---|---|
-| Any card | reply (if offered) or close (`:119`, `:121`) | zoom on a trip; nothing without a trip | **close the card** (`:121`) |
+| Any card | reply (if offered) or close (`:119`, `:121`) | as the screen under it (trip: zoom / command); nothing without a trip | **close the card** (`:121`) |
 | No trip, player hidden, music | **voice command** (`:129`) | show the player (`:135`) | leave the app |
-| No trip, nothing on screen | **voice command** (`:129`) | nothing (`:140`) | leave the app (`:145`) |
-| Voice command: starting / listening / result | as voice reply: tap stops, result closes (`:187`–`:203`) | nothing | cancel or close |
+| No trip, nothing on screen | **voice command** (`:129`) | nothing (`:140`) | leave the app (`:148`) |
+| Trip | view: corner map → big map → no map (`:141`) | **forward: step the zoom** (`:145`); **back: voice command** (`:146`) | leave the app; trip continues (`:148`) |
+| Trip, detour offer | take the new route | forward: step the zoom; back: nothing | keep the current route |
+| Voice command: starting / listening / result | as voice reply: tap stops, result closes (`:197`–`:213`) | nothing | cancel or close |
 
 ### 4.3 How it runs
 
 ```
-glasses tap ─► GlassesAction(VOICE_START, targetId = VOICE_COMMAND_ID) ─► phone
+glasses tap (trip: swipe back) ─► GlassesAction(VOICE_START, targetId = VOICE_COMMAND_ID) ─► phone
 phone: VoiceReplyController.start ─► glasses microphone + sherpa-onnx (as for replies)
-       ─► VoiceState LISTENING (words so far) ─► glasses card "VOICE COMMAND"
+       ─► VoiceState LISTENING (words so far) ─► glasses card "VOICE COMMAND" (narrow trip card: "COMMAND")
        pause / tap (VOICE_STOP) ─► VoiceCommands.opensGrokBot(words) ─► GrokBot.open(context)
        ─► VoiceState SENT "Opening Grok Bot on the phone"  or  FAILED "<reason>" ─► card closes after 2 s
 ```
@@ -116,8 +131,12 @@ phone: VoiceReplyController.start ─► glasses microphone + sherpa-onnx (as fo
 - **Protocol:** one new constant, `VOICE_COMMAND_ID = "voice-command"` (`NavMessage.kt`). The existing `VOICE_*` actions and
   `VoiceState` carry it, so nothing changes on the wire (`docs/PROTOCOL.md`).
 - **No check step.** Opening an app sends nothing to anyone, and one gesture on the phone undoes it. A reply still needs Send.
-- **Matching** (`phone/.../voice/VoiceCommands.kt`): "open" directly followed by "grok" or "grokbot", anywhere in what was
-  heard. So "open Grok Bot" and "open Grok" both count (speech to text may drop the last word). Nothing else counts.
+- **Matching** (`phone/.../voice/VoiceCommands.kt`): "open" directly followed by "grok" or a likely misspelling of it,
+  anywhere in what was heard. The offline model does not know the word "Grok". A misspelling is any word one letter away
+  from "grok" (grock, groc, grog, groke, grow, grak), or one of a short list (rock, brock, crock). "bot" may follow or be
+  joined ("grokbot", "rockbot"). So "open Grok Bot" and "open Grok" both count (speech to text may drop the last word).
+  Without "open" right before it nothing counts: "rock music", "grok bot", "open the grok bot" open nothing, and neither
+  do "open maps", "open group", "open book".
 - **Not understood:** FAILED shows `Heard "<text>". Say "open Grok Bot"`, so the user sees what the model heard.
 
 ### 4.4 Opening Grok Bot on the phone
@@ -151,31 +170,33 @@ phone: VoiceReplyController.start ─► glasses microphone + sherpa-onnx (as fo
 | Double tap closes a card; no hidden view/zoom changes without a trip | `glasses/.../state/HudStore.kt`, `HudStoreTest.kt`, `MainActivity.kt` (debug `previewExpanded` now sets the view directly) |
 | Speech engine load errors report FAILED instead of crashing | `phone/.../voice/VoiceReplyController.kt`, `VoiceReplyControllerTest.kt` |
 | Voice command "open Grok Bot" | `protocol/.../NavMessage.kt`, `docs/PROTOCOL.md`; glasses `HudStore.kt`, `Renderers.kt` (card without a notification, "VOICE COMMAND" header, player hidden under it), `MainActivity.kt` (screen kept on while voice runs; debug scene `command`); phone `VoiceCommands.kt`, `GrokBot.kt`, `VoiceReplyController.kt`, `NavSessionCoordinator.kt`, `RokidNavApp.kt`, `AndroidManifest.xml`; tests `VoiceCommandsTest.kt`, `VoiceReplyControllerTest.kt`, `HudStoreTest.kt` |
+| Misspellings of "Grok" right after "open" count | `phone/.../voice/VoiceCommands.kt`, `VoiceCommandsTest.kt` |
+| Command on a trip: swipe back; swipe forward steps the zoom | `glasses/.../state/HudStore.kt`, `Renderers.kt` (short header and hint on the narrow trip card), `HudStoreTest.kt` |
 | One hint style | `Renderers.kt` (corner detour) |
 | Docs | this file, `docs/VOICE.md`, `docs/INTERACTION.md` (status line), `README.md` (the touchpad menu it described was removed on 2026-10-20) |
 
-Tests: `:protocol:test :phone:testDebugUnitTest :glasses:testDebugUnitTest :tools:test assembleDebug` pass, 130 tests
+Tests: `:protocol:test :phone:testDebugUnitTest :glasses:testDebugUnitTest :tools:test assembleDebug` pass, 132 tests
 (119 before), zero failures, both debug APKs built.
 
 ## 6. Left out on purpose
 
 - No app launcher framework, no list of apps, no second command, no settings screen. One matcher and one constant.
 - No "open Grok Bot and start talking" (no documented deep link or intent for it).
-- No other spellings or sound-alikes of "Grok" in the matcher (Bryan's call: "open Grok Bot" and "open Grok" only).
+- No general fuzzy matching of whole phrases: one edit away from "grok", a three-word list, and "open" right before it.
+- No zoom-out swipe on a trip (swipe forward steps the zoom in a loop; swipe back is the command).
 - No Home screen or focus framework (`docs/INTERACTION.md` decisions 1 and 4 are still Bryan's).
 - No phone button for the overlay grant. The glasses message says what to do, and it is a one-time switch.
 - No timeout for a voice card stuck in "Starting…" when the phone never answers. "2× TAP cancel" shows on it.
 - No change to the arrival screen's tap and swipe (harmless, closes itself).
 - No wake-word or always-on listening (battery, privacy, and the mic stream needs a gesture to start).
 
-## 7. Open questions for Bryan
+## 7. Questions for Bryan (answered 2026-11-02)
 
-1. **Tap on the black screen with music:** command (now) or show the player (before)? If the player should win, the command
-   could move to "tap on the black screen when no music is loaded" only. Then it would be unreachable while Spotify is paused.
-2. The offline model does not know the word "Grok". If it writes it another way ("grock", "rock"), the command fails and the
-   glasses show what was heard. Add that spelling to `VoiceCommands` then, or keep it strict?
-3. Do you want a confirm step ("Open Grok Bot?") before the app opens? It is left out because opening an app is harmless.
-4. Should a command card also be possible during a trip? It is off now for driver safety.
+1. **Tap on the black screen with music:** command or show the player? **Answer: the command** (no change).
+2. **Misspellings of "Grok":** strict or loose? **Answer: loose**, but "open" must come right before it (section 4.3).
+   If the model still writes it another way, the glasses show what was heard: add that word to `VoiceCommands`.
+3. **Confirm step** ("Open Grok Bot?") before the app opens? **Answer: no** (no change).
+4. **Command during a trip?** **Answer: yes.** Built as swipe back on the trip screen (section 4.1).
 
 ## 8. What to test on the real glasses and phone
 
@@ -190,7 +211,7 @@ Tests:
 2. Say "open Grok Bot". Expect "Opening Grok Bot on the phone", and Grok Bot opens on the unlocked phone with the phone app in
    the background. Repeat with "open Grok".
 3. Say something else. Expect `Heard "…". Say "open Grok Bot"`. If "open Grok Bot" itself fails, write down what the model
-   wrote (open question 2).
+   wrote and add the word to `VoiceCommands` (question 2).
 4. Turn off the overlay grant. Repeat test 2 with the phone app in the background. Expect "Allow 885rokidOS to display over
    other apps", and no crash.
 5. Repeat test 2 with the phone locked. Expect Grok Bot to be on screen after unlocking.
@@ -201,4 +222,8 @@ Tests:
 9. Without a trip, tap and swipe on the black screen. Then start a trip. Expect the corner view and the zoom set on the phone.
 10. Without the native libraries (or with the model removed), start a voice reply and a command. Expect FAILED with a reason,
     and no crash of the phone app.
-11. Debug preview without a phone: `adb shell am start -n com.rokidnav.glasses/.MainActivity --es previewScene command`.
+11. On a trip (corner view): **swipe back**. Expect a narrow "COMMAND" card in the right corner, the turn still visible on the
+    left. Say "open Grok Bot". Then **swipe forward** a few times: the zoom steps default → far → close → default, one step
+    per swipe. Tap still changes the view; double tap still leaves the app. With a faster-route offer on screen, swipe back
+    does nothing.
+12. Debug preview without a phone: `adb shell am start -n com.rokidnav.glasses/.MainActivity --es previewScene command`.

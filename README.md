@@ -20,10 +20,10 @@ an app on the glasses, which draws its own monochrome HUD.
 - **Traffic and detours**: delay chip, plus faster-route offers you accept or dismiss from the touchpad.
 - **WzSabre police reports and speed cameras**: passive alerts that clear themselves once passed,
   with an optional voice warning for each new report near your route.
-- **Touchpad**: on a trip, tap changes the view and swipe zooms. Double-tap returns to Rokid home, and
-  reopening the HUD resumes the trip. Gesture map: [docs/nav-review.md](docs/nav-review.md).
+- **Touchpad**: on a trip, tap changes the view, swipe forward steps the zoom and swipe back speaks a command.
+  Double-tap returns to Rokid home, and reopening the HUD resumes the trip. Gesture map: [docs/nav-review.md](docs/nav-review.md).
 - **Notifications, media and voice**: phone notifications as short cards, music control, voice replies to
-  messages, and the voice command "open Grok Bot" (tap the empty screen, then speak).
+  messages, and the voice command "open Grok Bot" (tap the empty screen, or swipe back on a trip, then speak).
 - **Auto-install and update**: the phone sends the HUD to the glasses when you connect.
 
 ## How it fits together
