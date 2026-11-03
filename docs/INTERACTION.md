@@ -1,5 +1,7 @@
 # 885rokidOS interaction model (PROPOSAL, 2026-11-01)
 
+The gestures as built today: `docs/GESTURES.md`.
+
 Status: **proposal, not built.** The countdown on the notification card is built. Everything below needs
 the user's decision first (see "Decisions"). Voice replies (section 4) are built: see `docs/VOICE.md`. The
 gestures as built today, and the voice command, are in `docs/nav-review.md` (2026-11-02).
