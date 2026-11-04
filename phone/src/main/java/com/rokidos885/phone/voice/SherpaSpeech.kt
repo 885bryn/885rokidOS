@@ -39,7 +39,7 @@ class SherpaSpeech(modelDir: File) : AutoCloseable {
                 rule3 = EndpointRule(false, 0.0f, 12.0f),
             ),
             enableEndpoint = true,
-            decodingMethod = "greedy_search",
+            decodingMethod = "modified_beam_search",
         ),
     )
 
