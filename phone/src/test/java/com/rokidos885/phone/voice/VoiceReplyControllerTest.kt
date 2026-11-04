@@ -5,7 +5,6 @@ import com.rokidos885.phone.glasses.EnvironmentStatus
 import com.rokidos885.phone.glasses.GlassesLink
 import com.rokidos885.phone.glasses.LinkState
 import com.rokidos885.protocol.NavMessage
-import com.rokidos885.protocol.VOICE_COMMAND_ID
 import com.rokidos885.protocol.VoicePhase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -119,41 +118,6 @@ class VoiceReplyControllerTest {
         assertEquals(VoicePhase.FAILED, r.reports.last().phase)
         assertEquals("Speech engine failed: UnsatisfiedLinkError", r.reports.last().text)
         assertEquals("the microphone is closed again", 1, r.link.stopped)
-    }
-
-    private fun kotlinx.coroutines.test.TestScope.commandRig(openResult: String?, opened: MutableList<Unit>, endAfter: Int): Rig {
-        val reports = mutableListOf<Report>()
-        val sent = mutableListOf<Pair<String, String>>()
-        val link = FakeLink()
-        val controller = VoiceReplyController(backgroundScope, link, FakeTranscriber(endAfter), { id, text -> sent += id to text; true },
-            openGrokBot = { opened += Unit; openResult }) { p, i, t -> reports += Report(p, i, t) }
-        return Rig(link, controller, reports, sent)
-    }
-
-    @Test fun theOpenGrokBotCommandOpensGrokBotAtOnceWithoutACheckStep() = runTest {
-        val opened = mutableListOf<Unit>()
-        val r = commandRig(null, opened, endAfter = 3)
-        r.controller.start(VOICE_COMMAND_ID); runCurrent()
-        listOf("open", "grok", "bot").forEach { r.link.audio.tryEmit(it.toByteArray()) }; runCurrent()
-        assertEquals(1, opened.size)
-        assertEquals(Report(VoicePhase.SENT, VOICE_COMMAND_ID, "Opening Grok Bot on the phone"), r.reports.last())
-        assertTrue("no REVIEW step for a command", r.reports.none { it.phase == VoicePhase.REVIEW })
-        assertTrue("a command sends no reply", r.sent.isEmpty())
-    }
-
-    @Test fun anUnknownCommandOrABlockedStartIsReportedAsFailed() = runTest {
-        val opened = mutableListOf<Unit>()
-        val unknown = commandRig(null, opened, endAfter = 2)
-        unknown.controller.start(VOICE_COMMAND_ID); runCurrent()
-        unknown.link.audio.tryEmit("open".toByteArray()); unknown.link.audio.tryEmit("maps".toByteArray()); runCurrent()
-        assertEquals(VoicePhase.FAILED, unknown.reports.last().phase)
-        assertEquals("Heard \"Open maps\". Say \"open Grok Bot\"", unknown.reports.last().text)
-        assertTrue(opened.isEmpty())
-
-        val blocked = commandRig("Allow 885rokidOS to display over other apps", opened, endAfter = 2)
-        blocked.controller.start(VOICE_COMMAND_ID); runCurrent()
-        blocked.link.audio.tryEmit("open".toByteArray()); blocked.link.audio.tryEmit("grok".toByteArray()); runCurrent()
-        assertEquals(Report(VoicePhase.FAILED, VOICE_COMMAND_ID, "Allow 885rokidOS to display over other apps"), blocked.reports.last())
     }
 
     @Test fun anAppThatRefusesTheReplyIsReportedAsFailed() = runTest {

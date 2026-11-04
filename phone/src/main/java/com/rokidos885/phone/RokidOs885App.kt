@@ -79,6 +79,7 @@ class RokidOs885App : Application() {
             voiceAudio = if(BuildConfig.DEBUG)lastVoiceRecorder(java.io.File(filesDir,"voice-last.pcm")) else null,
             openGrokBot = {com.rokidos885.phone.voice.GrokBot.open(this)},
             grokBotRunning = {com.rokidos885.phone.voice.GrokBot.running(this)},
+            callRecordings = {com.rokidos885.phone.voice.GrokBot.callRecordings(this)},
         )
         coordinator.start()
         media.start()

@@ -1,6 +1,7 @@
 package com.rokidos885.phone.notify
 
 import android.app.Notification
+import android.os.PowerManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -8,7 +9,8 @@ import com.rokidos885.phone.RokidOs885App
 
 /**
  * Reads every phone notification once the user grants "Notification access" (Settings screen) and
- * hands the ones [NotificationFilter] accepts to the coordinator. Turn off Rokid's own notification
+ * hands the ones [NotificationFilter] accepts to the coordinator, only while the phone screen is off: with the screen on
+ * the user sees the notification on the phone (user choice 2026-11-04). Turn off Rokid's own notification
  * forwarding in Hi Rokid, or the glasses show both.
  */
 class PhoneNotificationListener : NotificationListenerService() {
@@ -29,6 +31,11 @@ class PhoneNotificationListener : NotificationListenerService() {
         // No notification text in logs: only the package and the decision.
         if (!NotificationFilter.shouldForward(notice)) {
             Log.i(TAG, "dropped by filter pkg=${notice.packageName} category=${notice.category} ongoing=${notice.ongoing} summary=${notice.groupSummary}")
+            return
+        }
+        // Not recorded in lastSent, so an update that comes after the screen goes off is still shown.
+        if (getSystemService(PowerManager::class.java).isInteractive) {
+            Log.i(TAG, "not forwarded, phone screen on pkg=${notice.packageName}")
             return
         }
         val canReply = RokidOs885App.instance.replies.remember(sbn)

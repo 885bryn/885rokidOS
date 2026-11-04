@@ -56,7 +56,7 @@ class MainActivity:AppCompatActivity() {
         hud.setOnTouchListener { _,event -> gestures.onTouchEvent(event) }
         hud.post {vm.onDisplayReady(hud.width,hud.height)}
         lifecycleScope.launch {repeatOnLifecycle(Lifecycle.State.STARTED){vm.store.state.collect {hud.render(it);keepScreenOn(it)}}}
-        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|command).
+        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media).
         // The big message numbers make the store ignore the demo trip's own messages.
         if(BuildConfig.DEBUG)intent.getStringExtra("previewScene")?.let {scene->
             val n=1_000_000_000L
@@ -65,8 +65,6 @@ class MainActivity:AppCompatActivity() {
             if(scene=="media") {
                 store.onMessage(com.rokidos885.protocol.MediaState(n+1,true,"Spotify","Midnight City, a very long track title that wraps","M83",true,0,0))
                 store.onKey(GlassesKey.SWIPE_FORWARD)
-            } else if(scene=="command") {
-                store.onMessage(com.rokidos885.protocol.VoiceState(n+1,com.rokidos885.protocol.VoicePhase.LISTENING,com.rokidos885.protocol.VOICE_COMMAND_ID,"open grok bot"))
             } else {
                 store.onMessage(com.rokidos885.protocol.PhoneNotification(n+1,"n1","WhatsApp","Sam Carter","Hey, are we still on for dinner tonight? I booked a table at the new place on Main Street for 7:30, but I can move it to 8 if you need more time after work.",canReply=true))
                 val phase=when(scene){"listening"->com.rokidos885.protocol.VoicePhase.LISTENING;"review"->com.rokidos885.protocol.VoicePhase.REVIEW;"sent"->com.rokidos885.protocol.VoicePhase.SENT;"failed"->com.rokidos885.protocol.VoicePhase.FAILED;else->null}

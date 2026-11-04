@@ -149,3 +149,32 @@ Changes: the waking touch counts as a tap; a tap on the 2 s Grok Bot card goes t
 | Phone screen on at the tap | Screen stays on | User confirmed | Pass, user report |
 
 Not measured: battery cost of the held display during a chat.
+
+## Spoken command removed — 2026-11-04
+
+At the user's request the spoken "open Grok Bot" command is gone: `VoiceCommands`, its test and the matching path in
+`VoiceReplyController` are deleted, and the debug `previewScene command` is gone with it. Grok Bot is started and closed
+by a tap (or swipe back on a trip) only, as in `docs/GESTURES.md`. Verify command re-run: 131 tests, zero failures, both
+debug APKs built. Hardware retest of the gesture path was not repeated; it is unchanged since 2026-11-03.
+
+## "GROK BOT · TAP to end" stuck with no chat — 2026-11-03
+
+Seen on the Nothing A059P: the glasses showed "GROK BOT · TAP to end" with no Grok Bot chat. `dumpsys audio` showed the
+mode owner was WhatsApp (pid 14880, `MODE_IN_COMMUNICATION` since 19:52), not Grok Bot. The phone took that mode for a
+chat, so the tap said "Closing Grok Bot" and the watcher kept the glasses in the chat state. Fix: a mode that is already
+on when the tap arrives, with no chat of ours running, is another app's call; the phone opens Grok Bot but does not follow
+the mode. A resync now always sends `GrokBotState`, so a reconnect clears a stuck HUD. New test
+`anotherAppsCallIsNotTakenForAGrokBotChat`. Verify: 135 tests, zero failures.
+
+Retest during the WhatsApp call: no "TAP to end", and the tap that ended the chat said "Opening Grok Bot". `dumpsys audio`
+showed that each Grok Bot chat adds its own call recording (source VOICE_COMMUNICATION, silenced) from its start to its
+end. Second fix: during another app's call, the phone counts call recordings at the tap (`GrokBot.callRecordings`), and
+a chat is one more than that. Test `duringAnotherAppsCallTheChatIsTheExtraCallRecording`. Verify: 135 tests, zero failures.
+Hardware retest (user, Nothing A059P, WhatsApp call on): tap shows "GROK BOT · TAP to end"; tap again closes Grok Bot and
+says "Closing Grok Bot". Pass, user report. Android does show other apps' call recordings to 885rokidOS.
+
+## Notifications only with the phone screen off — 2026-11-04
+
+User choice: the glasses show a phone notification only while the phone screen is off; with the screen on the user sees
+it on the phone. `PhoneNotificationListener` drops a notification when `PowerManager.isInteractive` is true (lock screen
+on counts as on). An update to the same notification after the screen goes off is still shown. Not yet tested on the phone.

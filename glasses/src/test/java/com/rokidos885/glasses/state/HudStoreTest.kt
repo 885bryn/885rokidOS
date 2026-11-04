@@ -288,7 +288,7 @@ class HudStoreTest {
         hud.onKey(GlassesKey.TAP)
         assertNull(hud.state.value.voice)
         hud.onConnection(true);hud.onMessage(media(1))
-        // Music plays, the player is hidden: a tap (reported twice) starts one command, not the player.
+        // Music plays, the player is hidden: a tap (reported twice) starts Grok Bot once, not the player.
         hud.onKey(GlassesKey.TAP);now+=15;hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
         assertEquals(com.rokidos885.protocol.VOICE_COMMAND_ID,sent.single().targetId)
@@ -299,7 +299,7 @@ class HudStoreTest {
         assertEquals(com.rokidos885.protocol.VoicePhase.SENT,hud.state.value.voice?.phase)
         now+=HudStore.REPLY_RESULT_MS;hud.tick()
         assertNull(hud.state.value.voice)
-        // On a trip a tap still changes the view, never starts a command.
+        // On a trip a tap still changes the view, never starts Grok Bot.
         sent.clear();hud.onMessage(com.rokidos885.protocol.NavStateUpdate(4,com.rokidos885.protocol.NavState.ACTIVE))
         now+=1_000;hud.onKey(GlassesKey.TAP)
         assertEquals(emptyList<ActionType>(),sent.map {it.action})
@@ -380,11 +380,11 @@ class HudStoreTest {
         now+=1_000;hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(0,hud.state.value.mapZoom)
         assertEquals(listOf(ActionType.CYCLE_ZOOM,ActionType.CYCLE_ZOOM),sent.map {it.action})
-        // Swipe back, reported twice, starts one command; tap still changes the view.
+        // Swipe back, reported twice, starts Grok Bot once; tap still changes the view.
         sent.clear();now+=1_000;hud.onKey(GlassesKey.SWIPE_BACK);now+=15;hud.onKey(GlassesKey.SWIPE_BACK)
         assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
         assertEquals(com.rokidos885.protocol.VOICE_COMMAND_ID,sent.single().targetId)
-        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))                 // cancels the command, stays in the app
+        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))                 // closes the Grok Bot card, stays in the app
         assertEquals(ActionType.VOICE_CANCEL,sent.last().action)
         now+=1_000;hud.onKey(GlassesKey.TAP)
         assertEquals(HudMode.Map,hud.state.value.mode)
@@ -428,6 +428,50 @@ class HudStoreTest {
         trip.onMessage(replyCard("n3"))
         sent.clear();trip.onKey(GlassesKey.TAP)
         assertEquals(emptyList<ActionType>(),sent.map {it.action})
+    }
+
+    @Test fun aSwipeClosesANotificationCardWithoutStartingAReply() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(replyCard("n1",canReply=true))
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertNull(hud.state.value.notification)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})       // not a reply, not Grok Bot
+        now+=1_000
+        hud.onMessage(replyCard("n2",canReply=true))
+        hud.onKey(GlassesKey.SWIPE_BACK)
+        assertNull(hud.state.value.notification)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+    }
+
+    @Test fun aSwipeOnATripClosesTheCardInsteadOfSteppingTheZoomOrStartingGrokBot() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true)
+        hud.onMessage(com.rokidos885.protocol.NavStateUpdate(1,com.rokidos885.protocol.NavState.ACTIVE))
+        hud.onMessage(replyCard("n1",canReply=true))
+        val zoom=hud.state.value.mapZoom
+        // The same swipe arrives by two input paths: it closes the card once and never steps the zoom.
+        hud.onKey(GlassesKey.SWIPE_FORWARD);now+=15;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertNull(hud.state.value.notification)
+        assertEquals(zoom,hud.state.value.mapZoom)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        now+=1_000
+        hud.onMessage(replyCard("n2",canReply=true))
+        hud.onKey(GlassesKey.SWIPE_BACK);now+=15;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertNull(hud.state.value.notification)
+        assertNull(hud.state.value.voice)                               // no Grok Bot card either
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+    }
+
+    @Test fun aSwipeThatClosedACardDoesNotRevealThePlayerWhenItArrivesAgain() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(media(1))
+        hud.onMessage(replyCard("n1",canReply=false))
+        hud.onKey(GlassesKey.SWIPE_FORWARD);now+=15;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertNull(hud.state.value.notification)
+        assertEquals(false,hud.state.value.mediaVisible)
     }
 
     @Test fun reviewScreenSwipesBetweenSendRedoCancelAndTapActsOnTheFocusedRow() {

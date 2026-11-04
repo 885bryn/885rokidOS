@@ -20,8 +20,11 @@ two or three times (600 ms guard).
 |---|---|---|---|---|
 | Empty screen | Start or end Grok Bot | Show the music player (if music plays) | Show the music player (if music plays) | Leave to the Rokid menu |
 | Music player (hides after 10 s) | Play or pause | Next track | Previous track | Leave to the Rokid menu |
-| Notification card with a reply box | Start a voice reply | — | — | Close the card |
-| Other notification card | Close the card | — | — | Close the card |
+| Notification card with a reply box | Start a voice reply | Close the card | Close the card | Close the card |
+| Other notification card | Close the card | Close the card | Close the card | Close the card |
+
+While a notification card is up, every gesture goes to the card: one swipe closes it instead of revealing the player
+or skipping a track. The same gesture reported twice (see the 600 ms guard below) still counts once.
 
 ## On a trip
 
@@ -29,8 +32,11 @@ two or three times (600 ms guard).
 |---|---|---|---|---|
 | Map | Change the view (corner, full map, minimal) | Change the zoom (default, far, close) | Start or end Grok Bot | Leave to the Rokid menu (the trip goes on, on the phone) |
 | Detour offer | Take the detour | Change the zoom | — | Keep the current route |
-| Notification card | Close the card (no replies on a trip) | Change the zoom | Start or end Grok Bot | Close the card |
+| Notification card | Close the card (no replies on a trip) | Close the card | Close the card | Close the card |
 | Arrival screen | As on the map | As on the map | As on the map | Close it |
+
+A notification card hides the trip's own swipe actions while it is up: a swipe closes the card, it does not step the
+zoom or start Grok Bot. Once the card is gone the map's gestures are back.
 
 ## Grok Bot
 

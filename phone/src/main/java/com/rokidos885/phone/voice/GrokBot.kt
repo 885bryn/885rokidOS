@@ -5,10 +5,11 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.media.MediaRecorder
 import android.os.PowerManager
 import android.provider.Settings
 
-/** Starts a Grok Bot voice chat on the phone for the voice command "open Grok Bot". */
+/** Starts a Grok Bot voice chat on the phone when the glasses ask for it (idle tap, or swipe back on a trip). */
 object GrokBot {
     /** "Grok Bot" on Google Play (not the Grok chat app, ai.x.grok). Keep equal to AndroidManifest.xml `<queries>`. */
     const val PACKAGE = "ai.x.grok.bot"
@@ -38,10 +39,19 @@ object GrokBot {
     /**
      * True while a Grok Bot voice chat runs: then [open] closes it (Grok Bot ends the chat on a second ACTION_ASSIST).
      * Grok Bot holds the phone in MODE_IN_COMMUNICATION for the chat and sets MODE_NORMAL when it ends (2026-11-03). Android
-     * does not say which app set the mode, so another app's internet call also counts.
+     * does not say which app set the mode, so another app's internet call also counts; during such a call the caller uses
+     * [callRecordings] instead (NavSessionCoordinator, OPEN_GROK_BOT).
      */
     fun running(context: Context): Boolean =
         context.getSystemService(AudioManager::class.java).mode == AudioManager.MODE_IN_COMMUNICATION
+
+    /**
+     * Active call recordings (source VOICE_COMMUNICATION) of every app; Android hides which app. During a WhatsApp call a
+     * Grok Bot chat adds one (silenced) from its start to its end (dumpsys audio, 2026-11-03).
+     */
+    fun callRecordings(context: Context): Int =
+        context.getSystemService(AudioManager::class.java).activeRecordingConfigurations
+            .count { it.clientAudioSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION }
 
     /** The Grok Bot start, or null when Grok Bot is not installed. */
     fun intent(context: Context): Intent? {
