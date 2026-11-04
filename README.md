@@ -1,6 +1,6 @@
 # 885rokidOS
 
-*(formerly Rokid Navigation: the repository and the `com.rokidnav.*` package ids keep the old name on purpose, because changing a package id breaks the installed apps and the Rokid link.)*
+*(formerly Rokid Navigation, package ids `com.rokidnav.*`; repository: [github.com/885bryn/885rokidOS](https://github.com/885bryn/885rokidOS). Since 2026-11-02 the apps are `com.rokidos885.phone` and `com.rokidos885.glasses`, and logcat tags start with `885rokidOS` (for example `885rokidOSLink`). They install as new apps: remove the old `com.rokidnav.*` apps from the phone and the glasses, add the new phone package to the Google API key restriction, and authorize the glasses again. Settings start fresh.)*
 
 A Google-Maps-style navigation HUD for **Rokid Glasses**. You pick a destination and route on your
 Android phone. The phone runs Google's turn-by-turn guidance and streams compact navigation data to
@@ -20,8 +20,10 @@ an app on the glasses, which draws its own monochrome HUD.
 - **Traffic and detours**: delay chip, plus faster-route offers you accept or dismiss from the touchpad.
 - **WzSabre police reports and speed cameras**: passive alerts that clear themselves once passed,
   with an optional voice warning for each new report near your route.
-- **Touchpad menu** for trip info, traffic, voice, units and zoom. Double-tap returns to Rokid home,
-  and reopening the HUD resumes the trip.
+- **Touchpad**: on a trip, tap changes the view, swipe forward steps the zoom and swipe back speaks a command.
+  Double-tap returns to Rokid home, and reopening the HUD resumes the trip. Gesture map: [docs/nav-review.md](docs/nav-review.md).
+- **Notifications, media and voice**: phone notifications as short cards, music control, voice replies to
+  messages, and a Grok Bot voice chat (tap the empty screen, or swipe back on a trip).
 - **Auto-install and update**: the phone sends the HUD to the glasses when you connect.
 
 ## How it fits together

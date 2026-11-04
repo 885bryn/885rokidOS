@@ -29,13 +29,13 @@ recording "hello this is the test" came back exactly.
 3. **Model.** Download `sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8.tar.bz2` from
    `https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/`, unpack it, and copy `encoder.int8.onnx`,
    `decoder.int8.onnx`, `joiner.int8.onnx` and `tokens.txt` to the phone:
-   `adb push <file> /sdcard/Android/data/com.rokidnav.phone/files/stt/sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8/`
+   `adb push <file> /sdcard/Android/data/com.rokidos885.phone/files/stt/sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8/`
    (on Windows Git Bash set `MSYS_NO_PATHCONV=1` first). An in-app download is not built yet.
 
 ## Debug tools
 
 - Glasses tab → "Voice test (speak for 6 s)" (debug builds): records, shows loudness and the text.
-- `adb shell am broadcast -n com.rokidnav.phone/com.rokidnav.phone.debug.VoiceReplayReceiver` transcribes the saved
+- `adb shell am broadcast -n com.rokidos885.phone/com.rokidos885.phone.debug.VoiceReplayReceiver` transcribes the saved
   recording again (`files/voice-spike.pcm` in the app's private folder). Debug builds only.
 
 ## The reply flow (built 2026-11-01)
@@ -52,6 +52,50 @@ recording "hello this is the test" came back exactly.
 5. Replies work while the notification is still posted, for up to 2 minutes (`ReplyCache`).
 
 Message text is never logged by the real flow.
+
+## Grok Bot by tap (built 2026-11-02; the spoken command came first)
+
+1. With no trip and nothing on the screen (no card, no player), **tap**. On a trip, **swipe back** (swipe forward steps the zoom).
+   The glasses send `OPEN_GROK_BOT` (no speech step) and show a "GROK BOT" card.
+2. `GrokBot.open` starts a Grok Bot voice chat on the phone (`ACTION_ASSIST`; the app's home screen if that is missing). The
+   voice chat uses the glasses mic and speaker. On the lock screen, `GrokBotUnlockActivity` turns the screen on and removes the
+   lock screen first; this works only when Smart Lock keeps the phone unlocked, else the glasses say "Unlock the phone for Grok Bot".
+3. The glasses show "Opening Grok Bot on the phone" (`SENT`) or the reason it did not work (`FAILED`) for 2 s.
+4. When the phone screen was off at the gesture, `ScreenLockService` locks the phone again once Grok Bot records (at most
+   8 s), so the screen goes off in the pocket. A screen that was on stays on. The chat keeps running. Turn the service on in Settings, Accessibility, "885rokidOS
+   screen lock" (Android 13+: first allow restricted settings in the 885rokidOS app info). Without it the screen stays on.
+5. A second tap during a chat ends it (Grok Bot ends the chat on a second `ACTION_ASSIST`). The phone sees the chat by the
+   audio mode (`GrokBot.running`: `MODE_IN_COMMUNICATION`) and the glasses say "Closing Grok Bot". A tap on the Grok Bot
+   card (up for 2 s after each tap) does the same; a double tap only closes the card.
+6. The touch that wakes a sleeping display counts as the tap (since 2026-11-03). It does not always reach the app, so while a
+   chat runs the phone sends `GrokBotState` (it polls the audio mode each second) and the glasses keep the display on and show
+   "GROK BOT · TAP to end". The tap that ends the chat then never meets a sleeping display.
+
+The spoken form ("open Grok Bot" after `VOICE_START` with `VOICE_COMMAND_ID`, matched by `VoiceCommands.opensGrokBot`) still works
+on the phone, but the HUD no longer sends it.
+
+### Phone setup for Grok Bot from a pocket (tested on the Nothing A059P, 2026-11-03)
+
+1. Install **Grok Bot** from Google Play (`ai.x.grok.bot`, not the Grok chat app `ai.x.grok`). Tested with 1.19.0.
+2. Allow **Display over other apps** for 885rokidOS (Settings, Apps, 885rokidOS). Without it, Android 10+ does not let a
+   background app open another app; the glasses then say so.
+3. Make the glasses a **Smart Lock trusted device** (Google "Extend Unlock", Trusted devices, add the glasses, here
+   `Glasses_4251`; the Settings path differs per phone). This is the workaround for the lock screen:
+   - Grok Bot started behind the lock screen stays hidden and never listens (tested with both `KEYCODE_ASSIST` and
+     `ACTION_ASSIST`). Grok Bot itself does not support the lock screen.
+   - With the glasses connected, Extend Unlock keeps the phone "unlocked" (`dumpsys trust`: `deviceLocked=0`), but the lock
+     screen still shows. So `GrokBotUnlockActivity` turns the screen on, calls `requestDismissKeyguard` (no PIN needed while
+     trusted), then starts Grok Bot.
+   - Without trust (glasses off, or Extend Unlock expired), the phone does not open the PIN screen in the pocket; the glasses
+     say "Unlock the phone for Grok Bot" (not yet tested).
+4. Turn on **885rokidOS screen lock** (Settings, Accessibility). On Android 13+, first allow **restricted settings** in the
+   885rokidOS app info (⋮ menu), because the app is not from Google Play. Without it the phone screen stays on after a pocket
+   start. A lock by this service (like the power button) keeps Smart Lock trust and the running chat.
+5. Optional, set during testing: Grok Bot as the **digital assistant** (Settings, Default apps). The app starts Grok Bot by
+   package, so this is probably not needed; not tested without it.
+
+Grok Bot uses the glasses mic and speaker (Bluetooth call audio, SCO) only when that link is up at the start; once it chose the
+phone speaker. Details and the earlier test list: `docs/nav-review.md`; device results: `docs/LOCAL_TEST_RESULTS.md`.
 
 ## Accuracy tuning (2026-11-01)
 

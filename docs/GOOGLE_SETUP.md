@@ -11,7 +11,7 @@ The SDK terms dialog and Android location permissions also need your input on th
 2. Enable **Maps SDK for Android**, **Navigation SDK**, **Places API (New)**, and **Routes API**.
    Use the same project for route tokens and Navigation SDK.
 3. Create an Android SDK API key, restricted to the first three APIs. Add this Android app restriction:
-   - Package: `com.rokidnav.phone`
+   - Package: `com.rokidos885.phone`
    - Debug signing SHA-1 on this computer: `0C:89:60:B2:A4:1D:E2:22:83:B2:EA:36:4E:74:EC:0C:4A:79:45:7E`
 4. Create a separate **Routes API** key. The client includes `X-Android-Package` and the signing
    certificate's SHA-1 in `X-Android-Cert`. Apply Android restrictions and verify the endpoint rejects

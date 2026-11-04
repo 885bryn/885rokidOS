@@ -2,7 +2,7 @@
 sdk.dir=C\:\\Users\\YOU\\AppData\\Local\\Android\\Sdk
 
 # Android SDK key: Maps SDK for Android, Navigation SDK and Places API (New).
-# Application restriction: Android app com.rokidnav.phone + the local signing SHA-1.
+# Application restriction: Android app com.rokidos885.phone + the local signing SHA-1.
 MAPS_API_KEY=replace-me
 
 # Separate key for Routes REST. The app sends its Android package and signing certificate headers.

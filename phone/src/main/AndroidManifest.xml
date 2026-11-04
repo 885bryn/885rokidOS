@@ -19,6 +19,10 @@
     <!-- Voice replies: speech to text on the phone. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Voice command "open Grok Bot": Android 10+ lets a background app open another app only with this grant
+         (Settings, Apps, 885rokidOS, Display over other apps). Declaring it is what makes that switch appear. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Glasses link without a trip (GlassesLinkService). Android 14 requires one of a set of
          permissions for this type; CHANGE_NETWORK_STATE is install-time, so it is always granted. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
@@ -29,11 +33,13 @@
         <package android:name="com.rokid.sprite.aiapp" />
         <package android:name="com.rokid.sprite.global.aiapp" />
         <package android:name="com.rokid.uxr" />
+        <!-- Grok Bot (voice command); keep equal to GrokBot.PACKAGE. -->
+        <package android:name="ai.x.grok.bot" />
     </queries>
 
     <application
         android:icon="@drawable/ic_nav"
-        android:name=".RokidNavApp"
+        android:name=".RokidOs885App"
         android:label="885rokidOS"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
@@ -49,6 +55,28 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Voice command "open Grok Bot" with the phone on the lock screen: removes it, then starts Grok Bot. -->
+        <activity
+            android:name=".voice.GrokBotUnlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Locks the phone again after that Grok Bot start. Active only after the user turns it on in Accessibility. -->
+        <service
+            android:name=".voice.ScreenLockService"
+            android:exported="false"
+            android:label="885rokidOS screen lock"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/screen_lock_service" />
+        </service>
 
         <!-- Receives the Navigation SDK turn-by-turn feed (NavInfo). -->
         <service

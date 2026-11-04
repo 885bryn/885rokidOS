@@ -1,2 +1,2 @@
 -keep class com.rokid.cxr.** { *; }
--keep class com.rokidnav.protocol.** { *; }
+-keep class com.rokidos885.protocol.** { *; }

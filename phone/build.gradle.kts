@@ -12,11 +12,11 @@ val localProps = Properties().apply {
 }
 
 android {
-    namespace = "com.rokidnav.phone"
+    namespace = "com.rokidos885.phone"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.rokidnav.phone"
+        applicationId = "com.rokidos885.phone"
         minSdk = 28          // CXR-L requirement
         targetSdk = 34       // matches CXR-L sample
         versionCode = 2
@@ -27,8 +27,8 @@ android {
         buildConfigField("String", "MAPS_API_KEY", "\"${localProps.getProperty("MAPS_API_KEY", "")}\"")
         buildConfigField("String", "ROUTES_API_KEY", "\"${localProps.getProperty("ROUTES_API_KEY", localProps.getProperty("MAPS_API_KEY", ""))}\"")
         // Glasses APK bundled into phone assets so CXR-L can auto-install it (see GlassesApkInstaller).
-        buildConfigField("String", "GLASSES_PACKAGE", "\"com.rokidnav.glasses\"")
-        buildConfigField("String", "GLASSES_ACTIVITY", "\"com.rokidnav.glasses.MainActivity\"")
+        buildConfigField("String", "GLASSES_PACKAGE", "\"com.rokidos885.glasses\"")
+        buildConfigField("String", "GLASSES_ACTIVITY", "\"com.rokidos885.glasses.MainActivity\"")
         // Version of the bundled glasses APK; a different GlassesHello.appVersion means the HUD is outdated.
         buildConfigField("String", "BUNDLED_HUD_VERSION", "\"${rootProject.extra["hudVersionName"]}\"")
     }
