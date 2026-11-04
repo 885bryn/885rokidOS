@@ -163,7 +163,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         lastSent["session"]?.let {link.send(fresh(it))};sendRoute()
         lastSent.filterKeys {it!="session"}.values.forEach {link.send(fresh(it))}
         offer.value?.takeIf {it.expiresAtMs>System.currentTimeMillis()}?.let {link.send(it.copy(seq=seq.next()))}
-        if(grokActive)link.send(GrokBotState(seq.next(),true))
+        // Sent either way: a HUD that kept "active" from before a phone restart clears it.
+        link.send(GrokBotState(seq.next(),grokActive))
     }
     /**
      * Follows the Grok Bot chat a glasses gesture started or closed, polling [grokBotRunning] each second (Android tells
@@ -244,12 +245,15 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
             ActionType.VOICE_CANCEL->voice?.cancel(a.targetId)
             ActionType.OPEN_GROK_BOT->{
                 val open=openGrokBot
-                // Checked before the start: the same start closes a running chat.
-                val closing=runCatching {grokBotRunning()}.getOrDefault(false)
+                // Checked before the start: the same start closes a running chat. Android does not say which app holds the
+                // call mode, so a mode that is on with no chat of ours is another app's call (WhatsApp, 2026-11-03): it
+                // cannot be followed, and watching it would show "GROK BOT · TAP to end" until that call ends.
+                val busy=runCatching {grokBotRunning()}.getOrDefault(false)
+                val closing=busy && grokActive
                 val problem=if(open==null)"Opening apps is not set up" else runCatching {open()}.getOrElse {"Could not open Grok Bot"}
                 val done=if(closing)"Closing Grok Bot" else "Opening Grok Bot on the phone"
                 link.send(VoiceState(seq.next(),if(problem==null)VoicePhase.SENT else VoicePhase.FAILED,VOICE_COMMAND_ID,problem ?: done))
-                if(problem==null)watchGrokBot()
+                if(problem==null){if(busy && !closing)grokWatch?.cancel() else watchGrokBot()}
             }
             ActionType.MEDIA_PLAY_PAUSE->media?.playPause()
             ActionType.MEDIA_NEXT->media?.next()

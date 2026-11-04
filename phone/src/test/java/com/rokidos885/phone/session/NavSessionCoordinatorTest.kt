@@ -145,6 +145,8 @@ class NavSessionCoordinatorTest {
         val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents,
             openGrokBot = { null }, grokBotRunning = { chat })
         coordinator.start(); runCurrent()
+        // The connect resync says "no chat"; only the changes after the tap count here.
+        link.sent.clear()
         fun states() = link.sent.filterIsInstance<GrokBotState>().map { it.active }
         link.incoming.emit(GlassesAction(1, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
         assertEquals(emptyList<Boolean>(), states())
@@ -159,6 +161,22 @@ class NavSessionCoordinatorTest {
         assertEquals(listOf(false), states())
         chat = true; advanceTimeBy(30_000); runCurrent()
         assertEquals(listOf(false), states())
+    }
+    @Test fun anotherAppsCallIsNotTakenForAGrokBotChat() = runTest {
+        val engine = Engine()
+        val link = Link()
+        var opened = 0
+        // A WhatsApp call holds the call mode before the tap; Android does not say which app holds it.
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents,
+            openGrokBot = { opened++; null }, grokBotRunning = { true })
+        coordinator.start(); runCurrent()
+        link.incoming.emit(GlassesAction(1, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); advanceTimeBy(30_000); runCurrent()
+        assertEquals(1, opened)
+        assertEquals("Opening Grok Bot on the phone", link.sent.filterIsInstance<VoiceState>().last().text)
+        assertTrue("the glasses never show a chat", link.sent.filterIsInstance<GrokBotState>().none { it.active })
+        // A reconnect clears a HUD that still shows a chat from before.
+        link.sent.clear(); link.incoming.emit(ResyncRequest(2)); runCurrent()
+        assertEquals(listOf(false), link.sent.filterIsInstance<GrokBotState>().map { it.active })
     }
     @Test fun messageNumbersStartFromTheGivenCounterStartSoARestartedPhoneCountsHigher() = runTest {
         val engine = Engine()

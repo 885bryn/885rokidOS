@@ -38,7 +38,8 @@ object GrokBot {
     /**
      * True while a Grok Bot voice chat runs: then [open] closes it (Grok Bot ends the chat on a second ACTION_ASSIST).
      * Grok Bot holds the phone in MODE_IN_COMMUNICATION for the chat and sets MODE_NORMAL when it ends (2026-11-03). Android
-     * does not say which app set the mode, so another app's internet call also counts.
+     * does not say which app set the mode, so another app's internet call also counts; the caller ignores a mode that was
+     * already on before a start of its own (NavSessionCoordinator, OPEN_GROK_BOT).
      */
     fun running(context: Context): Boolean =
         context.getSystemService(AudioManager::class.java).mode == AudioManager.MODE_IN_COMMUNICATION
