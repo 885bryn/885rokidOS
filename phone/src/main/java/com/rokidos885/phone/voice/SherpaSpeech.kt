@@ -13,7 +13,7 @@ import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 import java.io.File
 
 /**
- * Offline speech to text on the phone (sherpa-onnx, NVIDIA streaming FastConformer, English). It takes the glasses'
+ * Offline speech to text on the phone (sherpa-onnx, NVIDIA streaming FastConformer, English, 1040 ms chunks). It takes the glasses'
  * microphone audio (16 kHz, 16-bit mono PCM) as it arrives and writes the words so far. Loading the model takes a
  * second or two, so create it when a reply starts and [close] it afterwards. The model files are put in
  * [modelDir] by hand for now (docs/VOICE.md); there is no download inside the app yet.
@@ -39,7 +39,8 @@ class SherpaSpeech(modelDir: File) : AutoCloseable {
                 rule3 = EndpointRule(false, 0.0f, 12.0f),
             ),
             enableEndpoint = true,
-            decodingMethod = "modified_beam_search",
+            // Beam search gave the same words as greedy on the glasses recordings (2026-11-04) and costs more time.
+            decodingMethod = "greedy_search",
         ),
     )
 
@@ -80,14 +81,23 @@ class SherpaSpeech(modelDir: File) : AutoCloseable {
 
     companion object {
         const val SAMPLE_RATE = 16_000
-        private const val MODEL_NAME = "sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8"
+        /**
+         * Best first. The 1040 ms model made a third fewer word errors than the 80 ms one on the glasses recordings and
+         * decodes faster; it only shows words about a second later (docs/LOCAL_TEST_RESULTS.md, 2026-11-04). Same settings.
+         */
+        private val MODEL_NAMES = listOf(
+            "sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-1040ms-int8",
+            "sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8",
+        )
 
-        /** The folder with encoder, decoder, joiner and tokens, or null when the model is not on the phone yet. */
+        /** The folder with encoder, decoder, joiner and tokens, or null when no model is on the phone yet. */
         fun modelDir(context: Context): File? {
-            val dir = File(context.getExternalFilesDir("stt"), MODEL_NAME)
-            val ready = listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt").all { File(dir, it).isFile }
-            if (!ready) Log.i("885rokidOSVoice", "speech model missing in $dir")
-            return dir.takeIf { ready }
+            val dirs = MODEL_NAMES.map { File(context.getExternalFilesDir("stt"), it) }
+            // The app must own the folder: one made by `adb shell mkdir` belongs to shell and the app cannot read it.
+            dirs.first().mkdirs()
+            val dir = dirs.firstOrNull { d -> listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt").all { File(d, it).isFile } }
+            if (dir == null) Log.i("885rokidOSVoice", "speech model missing in ${dirs.first()}") else Log.i("885rokidOSVoice", "speech model ${dir.name}")
+            return dir
         }
     }
 }

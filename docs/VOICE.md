@@ -9,8 +9,8 @@ being built on top of it (see `docs/INTERACTION.md`, section 4).
   **16 kHz, 16-bit little-endian mono PCM in 640-byte chunks (20 ms)**. It needs the MICROPHONE permission in the Rokid
   authorization (requested by `CxrGlassesLink.authorize`).
 - **Speech to text** → [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) v2.0.1 (Apache-2.0), running offline on the phone's
-  CPU (`SherpaSpeech`). Model: `sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8` (NVIDIA NeMo
-  streaming FastConformer transducer, English, 102.8 MB; check the model card's license before sharing the app).
+  CPU (`SherpaSpeech`). Model: `sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-1040ms-int8` (NVIDIA NeMo
+  streaming FastConformer transducer, English, 1040 ms chunks, about 100 MB; the 80ms-int8 model is the fallback when it is missing; check the model card's license before sharing the app).
   No audio leaves the phone.
 - Android's own `SpeechRecognizer` does **not** work for this: it ignores audio handed to it (`EXTRA_AUDIO_SOURCE`), tested with
   the glasses recording and with a clean synthetic sentence, as a file and as a real-time pipe.
@@ -26,11 +26,13 @@ recording "hello this is the test" came back exactly.
 2. **Kotlin interface.** Committed in `phone/src/main/java/com/k2fsa/sherpa/onnx/` (five files from
    `sherpa-onnx/kotlin-api/` at tag v2.0.1, unchanged; the package name must stay `com.k2fsa.sherpa.onnx`
    because the native library looks classes up by that name).
-3. **Model.** Download `sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8.tar.bz2` from
+3. **Model.** Download `sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-1040ms-int8.tar.bz2` from
    `https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/`, unpack it, and copy `encoder.int8.onnx`,
    `decoder.int8.onnx`, `joiner.int8.onnx` and `tokens.txt` to the phone:
-   `adb push <file> /sdcard/Android/data/com.rokidos885.phone/files/stt/sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-80ms-int8/`
-   (on Windows Git Bash set `MSYS_NO_PATHCONV=1` first). An in-app download is not built yet.
+   `adb push <file> /sdcard/Android/data/com.rokidos885.phone/files/stt/sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-1040ms-int8/`
+   (on Windows Git Bash set `MSYS_NO_PATHCONV=1` first). Let the app make that folder: start one voice reply (or the
+   replay below) first. A folder made with `adb shell mkdir` belongs to `shell`, and the app cannot read it; it then
+   falls back to the 80 ms model. An in-app download is not built yet.
 
 ## Debug tools
 

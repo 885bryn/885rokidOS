@@ -178,3 +178,27 @@ says "Closing Grok Bot". Pass, user report. Android does show other apps' call r
 User choice: the glasses show a phone notification only while the phone screen is off; with the screen on the user sees
 it on the phone. `PhoneNotificationListener` drops a notification when `PowerManager.isInteractive` is true (lock screen
 on counts as on). An update to the same notification after the screen goes off is still shown. Not yet tested on the phone.
+
+## Speech to text: model and decoder on the glasses recordings — 2026-11-04
+
+10 recordings from the glasses mic (`.tmp/accuracy`, the reply phrases). Scored on the PC with sherpa-onnx 2.0.1, the app's
+settings (2 threads, pre-emphasis 0.8, the endpoint rules, 0.8 s pad). Recording 00 is a 0.3 s fragment; its words landed
+in 01, so 00 is skipped and 01 is "good to know on my way". "I'm" = "I am". 46 words.
+
+| Model | Wrong words | Decode, 9 files (PC) |
+|---|---|---|
+| FastConformer 80 ms (before) | 9 | 6.8 s |
+| FastConformer 480 ms | 9 | 2.9 s |
+| **FastConformer 1040 ms (chosen)** | **6** | **1.9 s** |
+| Nemotron 0.6B streaming 1120 ms (~600 MB) | 8 | 6.0 s |
+| Parakeet TDT 0.6B v2, not streaming (631 MB) | 6–7 | 3.8 s |
+
+- `modified_beam_search` gave the same words as greedy for every model (also with 4, 8, 16 paths on 80 ms): greedy is kept.
+- Pre-emphasis off, cutting the leading silence, and gain to a fixed peak each made the 80 ms model worse (11–16 wrong).
+  Pre-emphasis off also made the 1040 ms model worse on 04.
+- Left wrong with 1040 ms: "sounds good see there" (you), "let me share I can" (check and), "let me too" (love you).
+  Parakeet and Nemotron also miss 04 and 08, so the audio itself is likely unclear there.
+- Cost: words show about 1 s later while speaking; the end of speech is found up to ~0.5 s later.
+- Small sample: 10 phrases from one speaker.
+- On the Nothing A059P (replay of 05.pcm through `VoiceReplayReceiver`): 1040 ms heard "no problem thanks", load 1.9 s,
+  decode 247 ms; 80 ms heard "no problem thinks", load 2.0 s, decode 1462 ms. Not yet tested live through the glasses.
