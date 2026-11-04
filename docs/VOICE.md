@@ -74,9 +74,28 @@ Message text is never logged by the real flow.
 The spoken form ("open Grok Bot" after `VOICE_START` with `VOICE_COMMAND_ID`, matched by `VoiceCommands.opensGrokBot`) still works
 on the phone, but the HUD no longer sends it.
 
-Phone setup: allow **Display over other apps** for 885rokidOS (Settings, Apps, 885rokidOS). Without it, Android 10+ does not let
-a background app open another app; the glasses then say so. The package is `GrokBot.PACKAGE` (`ai.x.grok.bot`, the "Grok Bot"
-app, not the Grok chat app `ai.x.grok`). Details and the test list: `docs/nav-review.md`.
+### Phone setup for Grok Bot from a pocket (tested on the Nothing A059P, 2026-11-03)
+
+1. Install **Grok Bot** from Google Play (`ai.x.grok.bot`, not the Grok chat app `ai.x.grok`). Tested with 1.19.0.
+2. Allow **Display over other apps** for 885rokidOS (Settings, Apps, 885rokidOS). Without it, Android 10+ does not let a
+   background app open another app; the glasses then say so.
+3. Make the glasses a **Smart Lock trusted device** (Google "Extend Unlock", Trusted devices, add the glasses, here
+   `Glasses_4251`; the Settings path differs per phone). This is the workaround for the lock screen:
+   - Grok Bot started behind the lock screen stays hidden and never listens (tested with both `KEYCODE_ASSIST` and
+     `ACTION_ASSIST`). Grok Bot itself does not support the lock screen.
+   - With the glasses connected, Extend Unlock keeps the phone "unlocked" (`dumpsys trust`: `deviceLocked=0`), but the lock
+     screen still shows. So `GrokBotUnlockActivity` turns the screen on, calls `requestDismissKeyguard` (no PIN needed while
+     trusted), then starts Grok Bot.
+   - Without trust (glasses off, or Extend Unlock expired), the phone does not open the PIN screen in the pocket; the glasses
+     say "Unlock the phone for Grok Bot" (not yet tested).
+4. Turn on **885rokidOS screen lock** (Settings, Accessibility). On Android 13+, first allow **restricted settings** in the
+   885rokidOS app info (⋮ menu), because the app is not from Google Play. Without it the phone screen stays on after a pocket
+   start. A lock by this service (like the power button) keeps Smart Lock trust and the running chat.
+5. Optional, set during testing: Grok Bot as the **digital assistant** (Settings, Default apps). The app starts Grok Bot by
+   package, so this is probably not needed; not tested without it.
+
+Grok Bot uses the glasses mic and speaker (Bluetooth call audio, SCO) only when that link is up at the start; once it chose the
+phone speaker. Details and the earlier test list: `docs/nav-review.md`; device results: `docs/LOCAL_TEST_RESULTS.md`.
 
 ## Accuracy tuning (2026-11-01)
 
