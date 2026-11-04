@@ -116,8 +116,10 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             s.voice!=null->voiceKey(s,s.voice,key)
             // A card whose app has a reply box: tap starts a voice reply (shown at once; the phone confirms).
             s.replyAvailable && key==GlassesKey.TAP->startVoice(s.notification!!.id)
-            // Tap or double tap closes a card; the double tap does not also leave the app.
-            s.notification!=null && (key==GlassesKey.TAP || back)->{
+            // Any gesture closes a card: tap, a swipe either way, or double tap. It is consumed here, so the same swipe
+            // does not also step the trip zoom, start Grok Bot or bring up the player, and a second delivery from another
+            // input path is dropped. A double tap does not also leave the app.
+            s.notification!=null->{
                 lastMediaKey=key;lastMediaKeyAt=clock()
                 mutable.update {it.copy(notification=null)}
             }
@@ -130,12 +132,9 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 val now=clock()
                 if(!(lastMediaKey==key && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS))startVoice(VOICE_COMMAND_ID,action=ActionType.OPEN_GROK_BOT)
             }
-            // Music but the player hidden: a swipe brings it up (it must be seen before it is controlled); the same
-            // gesture arriving again by another input path is dropped by the media key guard.
-            idleMedia(s) && !back->{
-                lastMediaKey=key;lastMediaKeyAt=clock()
-                mutable.update {it.copy(mediaShown=true,mediaShownAt=clock())}
-            }
+            // Music but the player hidden: a swipe brings it up (it must be seen before it is controlled); a swipe that
+            // closed a card, arriving again by another input path, is not one (see repeated).
+            idleMedia(s) && !back->if(!repeated(key))mutable.update {it.copy(mediaShown=true,mediaShownAt=clock())}
             // No trip, nothing to act on.
             idle(s) && !back->Unit
             key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
