@@ -170,4 +170,5 @@ Retest during the WhatsApp call: no "TAP to end", and the tap that ended the cha
 showed that each Grok Bot chat adds its own call recording (source VOICE_COMMUNICATION, silenced) from its start to its
 end. Second fix: during another app's call, the phone counts call recordings at the tap (`GrokBot.callRecordings`), and
 a chat is one more than that. Test `duringAnotherAppsCallTheChatIsTheExtraCallRecording`. Verify: 135 tests, zero failures.
-Not yet confirmed on the phone: that Android shows other apps' recordings to 885rokidOS (they come without the app name).
+Hardware retest (user, Nothing A059P, WhatsApp call on): tap shows "GROK BOT · TAP to end"; tap again closes Grok Bot and
+says "Closing Grok Bot". Pass, user report. Android does show other apps' call recordings to 885rokidOS.
