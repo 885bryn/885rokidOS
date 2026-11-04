@@ -172,3 +172,9 @@ end. Second fix: during another app's call, the phone counts call recordings at 
 a chat is one more than that. Test `duringAnotherAppsCallTheChatIsTheExtraCallRecording`. Verify: 135 tests, zero failures.
 Hardware retest (user, Nothing A059P, WhatsApp call on): tap shows "GROK BOT · TAP to end"; tap again closes Grok Bot and
 says "Closing Grok Bot". Pass, user report. Android does show other apps' call recordings to 885rokidOS.
+
+## Notifications only with the phone screen off — 2026-11-04
+
+User choice: the glasses show a phone notification only while the phone screen is off; with the screen on the user sees
+it on the phone. `PhoneNotificationListener` drops a notification when `PowerManager.isInteractive` is true (lock screen
+on counts as on). An update to the same notification after the screen goes off is still shown. Not yet tested on the phone.
