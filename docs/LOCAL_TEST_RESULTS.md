@@ -164,5 +164,10 @@ mode owner was WhatsApp (pid 14880, `MODE_IN_COMMUNICATION` since 19:52), not Gr
 chat, so the tap said "Closing Grok Bot" and the watcher kept the glasses in the chat state. Fix: a mode that is already
 on when the tap arrives, with no chat of ours running, is another app's call; the phone opens Grok Bot but does not follow
 the mode. A resync now always sends `GrokBotState`, so a reconnect clears a stuck HUD. New test
-`anotherAppsCallIsNotTakenForAGrokBotChat`. Verify: 135 tests, zero failures. Limit: while another app holds the mode, the
-glasses cannot show a Grok Bot chat.
+`anotherAppsCallIsNotTakenForAGrokBotChat`. Verify: 135 tests, zero failures.
+
+Retest during the WhatsApp call: no "TAP to end", and the tap that ended the chat said "Opening Grok Bot". `dumpsys audio`
+showed that each Grok Bot chat adds its own call recording (source VOICE_COMMUNICATION, silenced) from its start to its
+end. Second fix: during another app's call, the phone counts call recordings at the tap (`GrokBot.callRecordings`), and
+a chat is one more than that. Test `duringAnotherAppsCallTheChatIsTheExtraCallRecording`. Verify: 135 tests, zero failures.
+Not yet confirmed on the phone: that Android shows other apps' recordings to 885rokidOS (they come without the app name).

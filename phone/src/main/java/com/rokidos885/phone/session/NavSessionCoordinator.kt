@@ -23,6 +23,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val openGrokBot:(()->String?)?=null,
     /** True while a Grok Bot chat runs, so the same gesture closes it ([com.rokidos885.phone.voice.GrokBot.running]). */
     private val grokBotRunning:()->Boolean={false},
+    /** Active call recordings of every app ([com.rokidos885.phone.voice.GrokBot.callRecordings]); a Grok Bot chat adds one. */
+    private val callRecordings:()->Int={0},
     // The glasses HUD outlives the phone app and drops any message numbered at or below the last it saw, so a
     // restarted phone must count higher than before: start from the clock (a restart is always later).
     seqStart:Long=System.currentTimeMillis()) {
@@ -45,6 +47,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private var lastMediaAt=0L
     private var grokActive=false
     private var grokWatch:Job?=null
+    /** Call recordings already on at a start during another app's call; null when the call mode was free. */
+    private var grokBase:Int?=null
     fun sendTestSnapshot(build:(()->Long)->List<NavMessage>) {
         if(link.state.value==LinkState.Ready)build(seq::next).forEach {link.send(it)}
     }
@@ -177,13 +181,19 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
             var waited=0L
             var seen=false
             while(true) {
-                val running=runCatching {grokBotRunning()}.getOrDefault(false)
+                val running=grokRunning()
                 if(running!=grokActive){grokActive=running;link.send(GrokBotState(seq.next(),running))}
                 if(running)seen=true
-                if(!running && (seen || waited>=GROK_START_MS))break
+                if(!running && (seen || waited>=GROK_START_MS)){grokBase=null;break}
                 delay(GROK_POLL_MS);waited+=GROK_POLL_MS
             }
         }
+    }
+    /** The call mode alone, or during another app's call, a call recording more than at the start (Grok Bot records one). */
+    private fun grokRunning():Boolean {
+        val busy=runCatching {grokBotRunning()}.getOrDefault(false)
+        val base=grokBase ?: return busy
+        return busy && runCatching {callRecordings()}.getOrDefault(0)>base
     }
     private fun fresh(m:NavMessage):NavMessage=when(m) {
         is SessionStart->m.copy(seq=seq.next());is ManeuverUpdate->m.copy(seq=seq.next())
@@ -246,14 +256,15 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
             ActionType.OPEN_GROK_BOT->{
                 val open=openGrokBot
                 // Checked before the start: the same start closes a running chat. Android does not say which app holds the
-                // call mode, so a mode that is on with no chat of ours is another app's call (WhatsApp, 2026-11-03): it
-                // cannot be followed, and watching it would show "GROK BOT · TAP to end" until that call ends.
+                // call mode, so a mode that is on with no chat of ours is another app's call (WhatsApp, 2026-11-03). Then the
+                // chat is the call recording Grok Bot adds to the ones on now.
                 val busy=runCatching {grokBotRunning()}.getOrDefault(false)
+                if(busy && !grokActive)grokBase=runCatching {callRecordings()}.getOrDefault(0)
                 val closing=busy && grokActive
                 val problem=if(open==null)"Opening apps is not set up" else runCatching {open()}.getOrElse {"Could not open Grok Bot"}
                 val done=if(closing)"Closing Grok Bot" else "Opening Grok Bot on the phone"
                 link.send(VoiceState(seq.next(),if(problem==null)VoicePhase.SENT else VoicePhase.FAILED,VOICE_COMMAND_ID,problem ?: done))
-                if(problem==null){if(busy && !closing)grokWatch?.cancel() else watchGrokBot()}
+                if(problem==null)watchGrokBot()
             }
             ActionType.MEDIA_PLAY_PAUSE->media?.playPause()
             ActionType.MEDIA_NEXT->media?.next()

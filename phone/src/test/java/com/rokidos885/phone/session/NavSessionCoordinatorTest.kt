@@ -162,21 +162,36 @@ class NavSessionCoordinatorTest {
         chat = true; advanceTimeBy(30_000); runCurrent()
         assertEquals(listOf(false), states())
     }
-    @Test fun anotherAppsCallIsNotTakenForAGrokBotChat() = runTest {
+    @Test fun duringAnotherAppsCallTheChatIsTheExtraCallRecording() = runTest {
         val engine = Engine()
         val link = Link()
         var opened = 0
-        // A WhatsApp call holds the call mode before the tap; Android does not say which app holds it.
+        // A WhatsApp call holds the call mode and one call recording; Android does not say which app holds them.
+        var recordings = 1
         val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents,
-            openGrokBot = { opened++; null }, grokBotRunning = { true })
-        coordinator.start(); runCurrent()
-        link.incoming.emit(GlassesAction(1, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); advanceTimeBy(30_000); runCurrent()
-        assertEquals(1, opened)
-        assertEquals("Opening Grok Bot on the phone", link.sent.filterIsInstance<VoiceState>().last().text)
-        assertTrue("the glasses never show a chat", link.sent.filterIsInstance<GrokBotState>().none { it.active })
+            openGrokBot = { opened++; null }, grokBotRunning = { true }, callRecordings = { recordings })
+        coordinator.start(); runCurrent(); link.sent.clear()
+        fun states() = link.sent.filterIsInstance<GrokBotState>().map { it.active }
+        fun said() = link.sent.filterIsInstance<VoiceState>().last().text
+        link.incoming.emit(GlassesAction(1, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals("Opening Grok Bot on the phone", said())
+        assertEquals("the call alone is not a chat", emptyList<Boolean>(), states())
+        // Grok Bot starts its chat: one more call recording.
+        recordings = 2; advanceTimeBy(1_500); runCurrent()
+        assertEquals(listOf(true), states())
+        // The tap that ends it says so; the extra recording goes and the glasses hear it.
+        link.incoming.emit(GlassesAction(2, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals("Closing Grok Bot", said())
+        recordings = 1; advanceTimeBy(1_500); runCurrent()
+        assertEquals(listOf(true, false), states())
+        assertEquals(2, opened)
+        // The next tap, still in the call, opens again; a Grok Bot that never starts shows no chat.
+        link.incoming.emit(GlassesAction(3, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); advanceTimeBy(30_000); runCurrent()
+        assertEquals("Opening Grok Bot on the phone", said())
+        assertEquals(listOf(true, false), states())
         // A reconnect clears a HUD that still shows a chat from before.
-        link.sent.clear(); link.incoming.emit(ResyncRequest(2)); runCurrent()
-        assertEquals(listOf(false), link.sent.filterIsInstance<GrokBotState>().map { it.active })
+        link.sent.clear(); link.incoming.emit(ResyncRequest(4)); runCurrent()
+        assertEquals(listOf(false), states())
     }
     @Test fun messageNumbersStartFromTheGivenCounterStartSoARestartedPhoneCountsHigher() = runTest {
         val engine = Engine()
