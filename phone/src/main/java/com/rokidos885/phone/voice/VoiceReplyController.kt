@@ -1,7 +1,6 @@
 package com.rokidos885.phone.voice
 
 import com.rokidos885.phone.glasses.GlassesLink
-import com.rokidos885.protocol.VOICE_COMMAND_ID
 import com.rokidos885.protocol.VoicePhase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -38,7 +37,6 @@ fun interface ReplySender { fun reply(notificationId: String, text: String): Boo
  * is ready, so nothing said right after the tap is lost), show the words as they come, stop when the speaker pauses (or
  * taps, or after [MAX_LISTEN_MS]), let the user confirm, then send. Every step is reported with [report], which may be
  * called from [work]. Nothing is sent without [send]. Message text is never logged here.
- * The id [VOICE_COMMAND_ID] marks a spoken command instead of a reply: after listening it is acted on at once ("open Grok Bot").
  */
 class VoiceReplyController(
     private val scope: CoroutineScope,
@@ -49,8 +47,6 @@ class VoiceReplyController(
     private val work: CoroutineContext = EmptyCoroutineContext,
     /** Debug aid: every microphone chunk, to keep the last recording for analysis. */
     private val onAudio: ((ByteArray) -> Unit)? = null,
-    /** The "open Grok Bot" command: null when Grok Bot was opened, otherwise the reason it was not ([GrokBot.open]). */
-    private val openGrokBot: (() -> String?)? = null,
     private val report: (VoicePhase, String, String) -> Unit,
 ) {
     private var job: Job? = null
@@ -144,19 +140,9 @@ class VoiceReplyController(
             while (held.isNotEmpty()) words = it.accept(held.removeFirst())
             val finalText = it.finish().ifBlank { words }
             if (finalText.isBlank()) { report(VoicePhase.FAILED, id, "Heard nothing"); return@use }
-            // A command has no check step: opening an app sends nothing and is undone with one gesture on the phone.
-            if (id == VOICE_COMMAND_ID) { command(finalText); return@use }
             reviewed = finalText
             report(VoicePhase.REVIEW, id, Dictation.format(finalText))
         }
-    }
-
-    private fun command(heard: String) {
-        val id = VOICE_COMMAND_ID
-        if (!VoiceCommands.opensGrokBot(heard)) { report(VoicePhase.FAILED, id, "Heard \"${Dictation.format(heard)}\". Say \"open Grok Bot\""); return }
-        val open = openGrokBot
-        val problem = if (open == null) "Opening apps is not set up" else runCatching { open() }.getOrElse { "Could not open Grok Bot" }
-        report(if (problem == null) VoicePhase.SENT else VoicePhase.FAILED, id, problem ?: "Opening Grok Bot on the phone")
     }
 
     private class EndOfSpeech : RuntimeException()

@@ -149,3 +149,10 @@ Changes: the waking touch counts as a tap; a tap on the 2 s Grok Bot card goes t
 | Phone screen on at the tap | Screen stays on | User confirmed | Pass, user report |
 
 Not measured: battery cost of the held display during a chat.
+
+## Spoken command removed — 2026-11-04
+
+At the user's request the spoken "open Grok Bot" command is gone: `VoiceCommands`, its test and the matching path in
+`VoiceReplyController` are deleted, and the debug `previewScene command` is gone with it. Grok Bot is started and closed
+by a tap (or swipe back on a trip) only, as in `docs/GESTURES.md`. Verify command re-run: 131 tests, zero failures, both
+debug APKs built. Hardware retest of the gesture path was not repeated; it is unchanged since 2026-11-03.

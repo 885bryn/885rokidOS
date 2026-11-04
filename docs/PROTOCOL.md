@@ -58,7 +58,7 @@ and opens a new session, which installs and opens the bundled APK. Tried once pe
 | `settings` | on change | voice muted, units, zoom, brightnessPercent (default 35, ignored), demoMode (default false: 30 fps map) |
 | `media` | track, play state or seek changes; resync | active (false = nothing playing), app, title, artist, playing, positionMs (at send time) and durationMs (0 = unknown); the glasses ignore both since the HUD has no bar, and a message that changes only the position does not redraw. Not part of the `lastSent` cache: resync sends it with the position moved forward. |
 | `notification` | phone notification posted (only while the link is Ready) | id, app, title, text, postedAtMs, canReply (the app has a free-text reply box). Shown as a short card; never resent on resync. |
-| `voice` | each step of a voice reply or voice command | phase (IDLE clears, LISTENING, REVIEW, SENT, FAILED), notificationId (`VOICE_COMMAND_ID` = "voice-command" for a spoken command), text (words so far / final words / reason; for a command, the SENT text says what was done). Commands skip REVIEW. Not cached for resync. |
+| `voice` | each step of a voice reply, or a Grok Bot card | phase (IDLE clears, LISTENING, REVIEW, SENT, FAILED), notificationId (`VOICE_COMMAND_ID` = "voice-command" for the Grok Bot card, which has no notification under it; its phases are STARTING, SENT, FAILED), text (words so far / final words / reason; for the Grok card, the SENT text says what was done). Not cached for resync. |
 | `grok_bot` | a Grok Bot chat started from the glasses runs or ended | active. The glasses keep the display on and show "GROK BOT · TAP to end" while active. Sent on change and on resync. |
 
 ## Glasses → phone
@@ -66,7 +66,7 @@ and opens a new session, which installs and opens the bundled APK. Tried once pe
 |---|---|
 | `hello` | glasses app start; carries display size. Phone replies with a full resync. |
 | `resync` | glasses missed something (e.g. incomplete route chunks after 5 s) |
-| `action` | ACCEPT_DETOUR / DISMISS_DETOUR (with offerId), END_NAVIGATION, TOGGLE_VOICE, ZOOM_IN/OUT, SHOW_ALTERNATIVES, TOGGLE_UNITS, CYCLE_BRIGHTNESS, CYCLE_ZOOM, MEDIA_PLAY_PAUSE / MEDIA_NEXT / MEDIA_PREVIOUS (control the phone's active media session), VOICE_START / VOICE_STOP / VOICE_SEND / VOICE_REDO / VOICE_CANCEL (targetId = notification id, or `VOICE_COMMAND_ID` for the older spoken command), OPEN_GROK_BOT (targetId `VOICE_COMMAND_ID`; the phone starts Grok Bot and answers with a `voice` SENT or FAILED; see docs/VOICE.md) |
+| `action` | ACCEPT_DETOUR / DISMISS_DETOUR (with offerId), END_NAVIGATION, TOGGLE_VOICE, ZOOM_IN/OUT, SHOW_ALTERNATIVES, TOGGLE_UNITS, CYCLE_BRIGHTNESS, CYCLE_ZOOM, MEDIA_PLAY_PAUSE / MEDIA_NEXT / MEDIA_PREVIOUS (control the phone's active media session), VOICE_START / VOICE_STOP / VOICE_SEND / VOICE_REDO / VOICE_CANCEL (targetId = notification id), OPEN_GROK_BOT (targetId `VOICE_COMMAND_ID`; the phone starts Grok Bot and answers with a `voice` SENT or FAILED; see docs/VOICE.md) |
 | `input` | raw key name, for logs/calibration only |
 
 ## Resync rule

@@ -33,7 +33,7 @@
         <package android:name="com.rokid.sprite.aiapp" />
         <package android:name="com.rokid.sprite.global.aiapp" />
         <package android:name="com.rokid.uxr" />
-        <!-- Grok Bot (voice command); keep equal to GrokBot.PACKAGE. -->
+        <!-- Grok Bot (started by a tap or a swipe back on the glasses); keep equal to GrokBot.PACKAGE. -->
         <package android:name="ai.x.grok.bot" />
     </queries>
 

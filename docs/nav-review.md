@@ -1,5 +1,11 @@
 # Glasses navigation review and the "open Grok Bot" voice command (2026-11-02)
 
+> **Historical record.** The spoken command in section 4 was removed on 2026-11-04 at the user's request:
+> Grok Bot is started by the gesture only (idle tap, or swipe back on a trip). `VoiceCommands`, its test and the
+> `VOICE_START` + `VOICE_COMMAND_ID` matching path are deleted; sections 4 and 8 below describe what was built
+> and tested with speech, not what the code does now. The gesture map, the rest of the review and `docs/VOICE.md`
+> are current.
+
 Result first:
 - The gesture scheme is mostly sound. It has one clear model: **tap acts, swipe moves or skips, double tap goes back**.
   Four places broke that model or did things the user could not see. Three of them are fixed.
@@ -73,6 +79,8 @@ Problems found (bold rows in the table above):
    itself in 10 s. **Left as is.**
 
 ## 4. The voice command
+
+> Removed 2026-11-04 (user request). Kept as the design record; the current behaviour is in `docs/VOICE.md`.
 
 ### 4.1 Which gesture owns it
 

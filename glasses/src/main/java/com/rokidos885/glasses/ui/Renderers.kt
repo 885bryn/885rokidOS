@@ -249,7 +249,7 @@ class HudRenderer(context: Context) {
         next.detour?.let { d -> detourSaving="Save ${Format.duration(d.savesSeconds)}"; detourVia=ellipsize("${d.via} · +${Format.distance(d.extraMeters,next.units)}",20f,284f) }
         // Card layout: with no trip it is wide and tall (nothing else to protect); on a trip the corner
         // view keeps it to the right of the turn arrow, and the big map view has the whole width.
-        // A voice command has a voice card but no notification under it; it takes the same place a card would.
+        // The Grok Bot card has a voice card but no notification under it; it takes the same place a card would.
         if(next.notification!=null || next.voice!=null) {
             val idle=next.navState==NavState.IDLE || next.navState==NavState.ENDED
             val corner=next.mode!=HudMode.Map
@@ -275,12 +275,12 @@ class HudRenderer(context: Context) {
             }
             next.voice?.let { v ->
                 if(v!==old.voice || n!==old.notification || moved) {
-                    val command=v.notificationId==VOICE_COMMAND_ID
-                    // The only command is the Grok Bot start (tap, no speech); the header fits the narrow trip card too.
-                    voiceHeader=ellipsize(if(command)"GROK BOT" else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
-                    // A command's result says what was done ("Opening Grok Bot on the phone").
+                    val grokCard=v.notificationId==VOICE_COMMAND_ID
+                    // The Grok Bot start (tap, no speech); the header fits the narrow trip card too.
+                    voiceHeader=ellipsize(if(grokCard)"GROK BOT" else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
+                    // The Grok card's text says what was done ("Opening Grok Bot on the phone").
                     val shown=when(v.phase) { VoicePhase.SENT->v.text.ifBlank{"Sent"}; VoicePhase.STARTING->"Starting…"
-                        VoicePhase.LISTENING->v.text.ifBlank{if(command)"Say \"open Grok Bot\"" else "Speak now…"}; else->v.text }
+                        VoicePhase.LISTENING->v.text.ifBlank{"Speak now…"}; else->v.text }
                     voiceLines=wrap(shown,VOICE_SIZE,cardW-32f,4)
                 }
             }

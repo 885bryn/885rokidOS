@@ -8,7 +8,7 @@ import android.media.AudioManager
 import android.os.PowerManager
 import android.provider.Settings
 
-/** Starts a Grok Bot voice chat on the phone for the voice command "open Grok Bot". */
+/** Starts a Grok Bot voice chat on the phone when the glasses ask for it (idle tap, or swipe back on a trip). */
 object GrokBot {
     /** "Grok Bot" on Google Play (not the Grok chat app, ai.x.grok). Keep equal to AndroidManifest.xml `<queries>`. */
     const val PACKAGE = "ai.x.grok.bot"

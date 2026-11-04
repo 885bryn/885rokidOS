@@ -149,7 +149,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         }
         return true
     }
-    /** Starts a voice reply to card [id], or a command ([VOICE_COMMAND_ID], [action] OPEN_GROK_BOT); shown at once, the phone confirms. */
+    /** Starts a voice reply to card [id], or the Grok Bot card ([VOICE_COMMAND_ID], [action] OPEN_GROK_BOT); shown at once, the phone confirms. */
     private fun startVoice(id:String,key:GlassesKey=GlassesKey.TAP,action:ActionType=ActionType.VOICE_START) {
         // The same gesture may arrive again by another input path; the voice key guard drops it (see mediaKey).
         lastMediaKey=key;lastMediaKeyAt=clock()

@@ -71,8 +71,9 @@ Message text is never logged by the real flow.
    chat runs the phone sends `GrokBotState` (it polls the audio mode each second) and the glasses keep the display on and show
    "GROK BOT · TAP to end". The tap that ends the chat then never meets a sleeping display.
 
-The spoken form ("open Grok Bot" after `VOICE_START` with `VOICE_COMMAND_ID`, matched by `VoiceCommands.opensGrokBot`) still works
-on the phone, but the HUD no longer sends it.
+The spoken form ("open Grok Bot" after `VOICE_START` with `VOICE_COMMAND_ID`, matched by `VoiceCommands.opensGrokBot`) was
+removed on 2026-11-04 at the user's request: Grok Bot is started by the gesture only. `VoiceCommands` and the matching
+path are deleted; `VOICE_COMMAND_ID` now only names the card that has no notification under it.
 
 ### Phone setup for Grok Bot from a pocket (tested on the Nothing A059P, 2026-11-03)
 

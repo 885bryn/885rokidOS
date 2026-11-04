@@ -4,7 +4,8 @@ The gestures as built today: `docs/GESTURES.md`.
 
 Status: **proposal, not built.** The countdown on the notification card is built. Everything below needs
 the user's decision first (see "Decisions"). Voice replies (section 4) are built: see `docs/VOICE.md`. The
-gestures as built today, and the voice command, are in `docs/nav-review.md` (2026-11-02).
+gestures as built today are in `docs/GESTURES.md` (the spoken command was removed on 2026-11-04;
+`docs/nav-review.md` is the 2026-11-02 record).
 
 Mockups: `docs/hud-mockups/Home.dc.html`, `NotificationActions.dc.html`, `Notification.dc.html` (countdown).
 

@@ -219,10 +219,10 @@ data class VoiceState(
 ) : NavMessage
 
 /**
- * [VoiceState.notificationId] and the actions' targetId for a command, not a reply to a notification. The glasses send
- * OPEN_GROK_BOT (tap on the empty idle screen, swipe back on a trip); the phone answers SENT (text = what was done) or
- * FAILED (text = the reason). The older spoken form (VOICE_START / VOICE_STOP / VOICE_CANCEL, then LISTENING) still works
- * on the phone; commands have no REVIEW step.
+ * [VoiceState.notificationId] and [GlassesAction.targetId] of the Grok Bot card, which has no notification under it. The
+ * glasses send OPEN_GROK_BOT (tap on the empty idle screen, swipe back on a trip); the phone answers SENT (text = what was
+ * done) or FAILED (text = the reason). There is no listening step and no REVIEW step. The name and value are kept so a HUD
+ * that is not updated yet still matches.
  */
 const val VOICE_COMMAND_ID = "voice-command"
 
