@@ -25,6 +25,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val grokBotRunning:()->Boolean={false},
     /** Active call recordings of every app ([com.rokidos885.phone.voice.GrokBot.callRecordings]); a Grok Bot chat adds one. */
     private val callRecordings:()->Int={0},
+    /** A dictation or Grok Bot starts (its id): a T3 reply still being read must stop, or the microphone hears it. */
+    private val onVoiceStart:(String)->Unit={},
     // The glasses HUD outlives the phone app and drops any message numbered at or below the last it saw, so a
     // restarted phone must count higher than before: start from the clock (a restart is always later).
     seqStart:Long=System.currentTimeMillis()) {
@@ -200,7 +202,7 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         is TripProgress->m.copy(seq=seq.next());is PositionUpdate->m.copy(seq=seq.next())
         is RoadContext->m.copy(seq=seq.next());is SettingsUpdate->m.copy(seq=seq.next())
         is TrafficSegments->m.copy(seq=seq.next());is NavStateUpdate->m.copy(seq=seq.next())
-        is Alert->m.copy(seq=seq.next());is AlertCleared->m.copy(seq=seq.next());else->m
+        is Alert->m.copy(seq=seq.next());is AlertCleared->m.copy(seq=seq.next());is T3Status->m.copy(seq=seq.next());else->m
     }
     internal fun offerDetour(decision:DetourEvaluator.Decision) {
         if(pending!=null)return
@@ -219,6 +221,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     /** Not cached for resync: a notification only matters when it arrives. Dropped unless the link is Ready. */
     fun forwardNotification(id:String,app:String,title:String,text:String,postedAtMs:Long,canReply:Boolean=false):Boolean=
         link.send(PhoneNotification(seq.next(),id,app,title,text,postedAtMs,canReply))
+    /** The glasses' T3 page; the last one is resent on resync. */
+    fun sendT3(status:T3Status)=sendStateful("t3",status.copy(seq=seq.next()))
     /** For the log only. */
     val linkStateName:String get()=link.state.value::class.simpleName.orEmpty()
     fun respondToDetour(accept:Boolean){offer.value?.let {action(GlassesAction(0,if(accept)ActionType.ACCEPT_DETOUR else ActionType.DISMISS_DETOUR,it.offerId))}}
@@ -249,11 +253,12 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
             // The glasses keep their own Rokid brightness; older HUDs may still send this.
             ActionType.CYCLE_BRIGHTNESS->Unit
             ActionType.SHOW_ALTERNATIVES->traffic.forceRefresh()
-            ActionType.VOICE_START,ActionType.VOICE_REDO->voice?.start(a.targetId) ?: link.send(VoiceState(seq.next(),VoicePhase.FAILED,a.targetId,"Voice replies are not set up"))
+            ActionType.VOICE_START,ActionType.VOICE_REDO->{onVoiceStart(a.targetId);voice?.start(a.targetId) ?: link.send(VoiceState(seq.next(),VoicePhase.FAILED,a.targetId,"Voice replies are not set up"))}
             ActionType.VOICE_STOP->voice?.stop()
             ActionType.VOICE_SEND->voice?.send(a.targetId)
             ActionType.VOICE_CANCEL->voice?.cancel(a.targetId)
             ActionType.OPEN_GROK_BOT->{
+                onVoiceStart(a.targetId)
                 val open=openGrokBot
                 // Checked before the start: the same start closes a running chat. Android does not say which app holds the
                 // call mode, so a mode that is on with no chat of ours is another app's call (WhatsApp, 2026-11-03). Then the

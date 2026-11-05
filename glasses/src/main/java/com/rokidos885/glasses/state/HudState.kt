@@ -8,6 +8,7 @@ import com.rokidos885.protocol.MediaState
 import com.rokidos885.protocol.NavState
 import com.rokidos885.protocol.PhoneNotification
 import com.rokidos885.protocol.PositionUpdate
+import com.rokidos885.protocol.T3Status
 import com.rokidos885.protocol.TrafficSegment
 import com.rokidos885.protocol.TripProgress
 import com.rokidos885.protocol.Units
@@ -56,15 +57,39 @@ data class HudState(
     val mediaShown: Boolean = false,
     val mediaShownAt: Long = 0,
 
+    /** The T3 page, left of home (swipe back from home). It stays the page across display sleep, until a swipe forward. */
+    val t3Page: Boolean = false,
+    /** Thread, model and run state from the phone, or null before the phone sent any. */
+    val t3: T3Status? = null,
+
     val mode: HudMode = HudMode.Compact,
     val mapZoom: Int = 1,         // 0 = close (~300 m ahead), 1 = default (~800 m), 2 = far (~2 km)
     val voiceMuted: Boolean = false,
     /** From phone settings: redraw the map at 30 fps all the time (demos). */
     val demoMode: Boolean = false,
     val nowMs: Long = 0,
+
+    /** The display is awake and the HUD knows it: a touch acts. Asleep, the touch that wakes the display only wakes it. */
+    val awake: Boolean = true,
+    /** 4, 3, 2, 1: seconds until the HUD lets the display sleep; 0 when no countdown runs. */
+    val sleepIn: Int = 0,
 )
 
+/** The phone is guiding: the display stays on for the whole trip. */
+val HudState.guiding: Boolean get() = navState in GUIDING && linkConnected && !phoneSilent
+private val GUIDING = setOf(NavState.ACTIVE, NavState.REROUTING, NavState.GPS_LOST, NavState.ARRIVED)
+
+/** Something on screen that must stay on: a trip, a card, a voice step or a Grok Bot chat. The awake time starts after it. */
+val HudState.holdsDisplay: Boolean get() = guiding || notification != null || voice != null || grokBotActive
+
+/** Home with nothing on it, awake: "ACTIVE" says the next tap starts Grok Bot. */
+val HudState.homeActive: Boolean get() = awake && linkConnected && !t3Page && !mediaVisible && notification == null && voice == null &&
+    !grokBotActive && (navState == NavState.IDLE || navState == NavState.ENDED)
+
 val HudState.mediaVisible: Boolean get() = media != null && mediaShown
+
+/** The T3 page is on screen: no trip, and no card or voice step over it. */
+val HudState.t3Visible: Boolean get() = t3Page && notification == null && voice == null && (navState == NavState.IDLE || navState == NavState.ENDED)
 
 /** A tap on the card starts a voice reply: the app offers a reply box and no trip is running (trip cards stay glances). */
 val HudState.replyAvailable: Boolean get() = notification?.canReply == true && (navState == NavState.IDLE || navState == NavState.ENDED)

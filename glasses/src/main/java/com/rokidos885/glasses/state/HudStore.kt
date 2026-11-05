@@ -8,6 +8,11 @@ import kotlinx.coroutines.flow.*
 /** Single writer: messages/keys -> immutable HudState. Renderers only consume snapshots. */
 class HudStore(private val clock:()->Long=System::currentTimeMillis,private val requestResync:()->Unit={},private val sendAction:(GlassesAction)->Unit) {
     private val mutable=MutableStateFlow(HudState())
+    /** How long the HUD stays awake after the last touch: the system's screen timeout (MainActivity sets it). */
+    var awakeMillis=AWAKE_MS
+    private var wokeAt=-WAKE_GAP_MS
+    /** Last touch, or last moment something held the display on ([holdsDisplay]); awake ends [awakeMillis] later. */
+    private var awakeAt=clock()
     val state:StateFlow<HudState> = mutable.asStateFlow()
     private var assembler=RouteAssembler()
     private var lastSeq=-1L
@@ -81,6 +86,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 else s.copy(voice=m,voiceAt=clock(),nowMs=clock(),voiceFocus=if(s.voice?.phase==m.phase)s.voiceFocus else 0)
             }
             is GrokBotState->mutable.update {it.copy(grokBotActive=m.active)}
+            // News from T3 keeps an awake HUD awake; it never wakes a sleeping one.
+            is T3Status->{if(state.value.awake)awakeAt=clock();mutable.update {it.copy(t3=m,sleepIn=0)}}
             else->Unit
         }
     }
@@ -99,11 +106,18 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
      * Applies a key. Returns false when the HUD has no use for it, so the caller hands it to the system:
      * double-tap / Back then exits to the Rokid home screen. Double-tap is "back one step" wherever there is a
      * step to go back from: keep the current route on a detour offer, close a card, cancel a voice reply, close
-     * the arrival screen. The HUD has no menu (removed 2026-10-20: the glasses deliver no spare gesture for it);
-     * trip and settings live on the phone. Map view and zoom belong to a trip, so without one tap and swipe
-     * never change them unseen.
+     * the arrival screen, go from a page to home. The HUD has no menu (removed 2026-10-20: the glasses deliver no
+     * spare gesture for it); trip and settings live on the phone. The map view belongs to a trip, so without one tap
+     * and swipe never change it unseen. Rules: tap acts, a swipe moves (page, row, track), double tap goes back.
      */
     fun onKey(key:GlassesKey):Boolean {
+        val now=clock()
+        // The touch that wakes the display only wakes it, on every screen (user request 2026-11-05). The rest of the
+        // same gesture, by the other input paths, is dropped with it.
+        awakeAt=now
+        if(!state.value.awake){wokeAt=now;mutable.update {it.copy(awake=true,sleepIn=0)};return true}
+        if(now-wokeAt<WAKE_GAP_MS)return true
+        mutable.update {it.copy(sleepIn=0)}
         val s=state.value
         val d=s.detour
         val back=key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK
@@ -123,13 +137,15 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 lastMediaKey=key;lastMediaKeyAt=clock()
                 mutable.update {it.copy(notification=null)}
             }
-            // No trip and the player on screen: tap plays or pauses, swipe skips.
-            idleMedia(s) && s.mediaShown && !back->mediaKey(key)
-            // No trip and nothing on screen: tap starts Grok Bot on the phone. The tap that closed a card or a voice
-            // result, arriving again by another input path, is not one. The touch that wakes the display is: one tap works
-            // whether or not the display slept, so nobody has to guess (user request 2026-11-03).
+            // No trip, the T3 page: swipe forward or double tap goes home; a tap starts dictation.
+            idle(s) && s.t3Page->t3Key(s,key)
+            // No trip and the player on screen: tap plays or pauses, swipes skip a track, double tap goes home.
+            idleMedia(s) && s.mediaShown->mediaKey(key)
+            // Home, no trip: swipe back brings up the T3 page. A swipe that closed a card is not one.
+            idle(s) && key==GlassesKey.SWIPE_BACK->if(!repeated(key))mutable.update {it.copy(t3Page=true,mediaShown=false)}
+            // Home, no trip, nothing on screen: tap starts Grok Bot on the phone, as tap on the map does on a trip. The
+            // display is awake ("ACTIVE"); the tap that closed a card or a voice result, arriving again, is not one.
             idle(s) && key==GlassesKey.TAP && s.linkConnected->{
-                val now=clock()
                 if(!(lastMediaKey==key && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS))startVoice(VOICE_COMMAND_ID,action=ActionType.OPEN_GROK_BOT)
             }
             // Music but the player hidden: a swipe brings it up (it must be seen before it is controlled); a swipe that
@@ -137,12 +153,12 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             idleMedia(s) && !back->if(!repeated(key))mutable.update {it.copy(mediaShown=true,mediaShownAt=clock())}
             // No trip, nothing to act on.
             idle(s) && !back->Unit
-            key==GlassesKey.TAP->mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
-            // On a trip, swipe forward steps the zoom (default, far, close, as the phone's "Map zoom" button) and swipe back
-            // starts Grok Bot: tap is the view and double tap leaves, so one swipe direction was the only free gesture.
-            // A detour offer keeps the screen for itself. Each swipe counts once, however many input paths report it.
-            key==GlassesKey.SWIPE_FORWARD->if(!repeated(key)){mutable.update {it.copy(mapZoom=(it.mapZoom+1)%3)};sendAction(GlassesAction(0,ActionType.CYCLE_ZOOM))}
-            key==GlassesKey.SWIPE_BACK->if(d==null && s.linkConnected && !repeated(key))startVoice(VOICE_COMMAND_ID,key,ActionType.OPEN_GROK_BOT)
+            // On a trip the map is home: tap starts Grok Bot (as on the empty home screen) and swipe forward steps the view
+            // (corner, full map, minimal). Zoom is the map's own (it frames the next turns) and the phone's "Map zoom"
+            // button. Swipe back is free. Each gesture counts once, however many input paths report it.
+            key==GlassesKey.TAP->if(s.linkConnected && !repeated(key))startVoice(VOICE_COMMAND_ID,key,ActionType.OPEN_GROK_BOT)
+            key==GlassesKey.SWIPE_FORWARD->if(!repeated(key))mode(when(s.mode){HudMode.Compact->HudMode.Map;HudMode.Map->HudMode.Minimal;else->HudMode.Compact})
+            key==GlassesKey.SWIPE_BACK->Unit
             (key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK) && s.navState==NavState.ARRIVED->mutable.update {it.copy(navState=NavState.IDLE)}
             key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK->return false
         }
@@ -174,15 +190,29 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         lastMediaKey=key;lastMediaKeyAt=now
         mutable.update {it.copy(mediaShownAt=now)}
         when(key) {
+            // Double tap goes home, as on every page.
+            GlassesKey.DOUBLE_TAP,GlassesKey.BACK->mutable.update {it.copy(mediaShown=false)}
             GlassesKey.TAP->{
                 sendAction(GlassesAction(0,ActionType.MEDIA_PLAY_PAUSE))
                 // Optimistic: the icon changes now; the phone's answer corrects it.
                 mutable.update {it.copy(media=it.media?.copy(playing=!it.media.playing))}
             }
+            // In the player a swipe moves through tracks (user choice 2026-11-05); double tap is the way home.
             GlassesKey.SWIPE_FORWARD->sendAction(GlassesAction(0,ActionType.MEDIA_NEXT))
-            else->sendAction(GlassesAction(0,ActionType.MEDIA_PREVIOUS))
+            GlassesKey.SWIPE_BACK->sendAction(GlassesAction(0,ActionType.MEDIA_PREVIOUS))
         }
     }
+    /** Keys on the T3 page (see [onKey]). Dictation is a voice reply to [T3_CARD_ID]: the usual steps, REVIEW included. */
+    private fun t3Key(s:HudState,key:GlassesKey) {
+        if(repeated(key))return
+        when(key) {
+            GlassesKey.SWIPE_FORWARD,GlassesKey.DOUBLE_TAP,GlassesKey.BACK->mutable.update {it.copy(t3Page=false)}
+            GlassesKey.TAP->if(s.linkConnected)startVoice(T3_CARD_ID)
+            GlassesKey.SWIPE_BACK->Unit
+        }
+    }
+    /** The display went to sleep (SCREEN_OFF): the touch that wakes it only wakes it. */
+    fun onDisplayOff(){mutable.update {it.copy(awake=false,sleepIn=0)}}
     /** Keys during a voice reply. Everything is consumed so a swipe never skips a song or the double tap never exits. */
     private fun voiceKey(s:HudState,v:VoiceState,key:GlassesKey) {
         val id=v.notificationId
@@ -192,9 +222,9 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         val now=clock()
         if(key==lastMediaKey && now-lastMediaKeyAt<MEDIA_KEY_GAP_MS)return
         lastMediaKey=key;lastMediaKeyAt=now
-        // The Grok Bot card (no speech step) is up for 2 s after each tap: its own gesture (tap, or swipe back on a trip)
-        // starts or closes Grok Bot again, as on the empty screen, instead of only closing the card.
-        if(id==VOICE_COMMAND_ID && v.phase in GROK_CARD && (key==GlassesKey.TAP || key==GlassesKey.SWIPE_BACK)) {
+        // The Grok Bot card (no speech step) is up for 2 s after each tap: a tap starts or closes Grok Bot again, as on
+        // home, instead of only closing the card. A swipe never starts anything.
+        if(id==VOICE_COMMAND_ID && v.phase in GROK_CARD && key==GlassesKey.TAP) {
             startVoice(id,key,ActionType.OPEN_GROK_BOT)
             return
         }
@@ -239,10 +269,23 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             voice=s.voice?.takeIf {!resultOver(s,now)},
             mediaShown=s.mediaShown && now-s.mediaShownAt<MEDIA_SHOW_MS,
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
+                .let {awakeTick(it,now)}
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
             // Otherwise an unchanged state is not re-emitted, so an idle HUD does not redraw every second.
             // A card on screen counts down in seconds, so it redraws every tick; otherwise nothing to redraw.
             if(s.alerts.isEmpty() && s.detour==null && s.notification==null && n==s.copy(nowMs=now))s else n}
+    }
+    /**
+     * Awake runs [awakeMillis] after the last touch, or after a trip, card, voice step or chat let go of the display.
+     * The last [COUNTDOWN_MS] count down on screen; then the HUD lets the display sleep (MainActivity drops the hold)
+     * and counts itself asleep, even if SCREEN_OFF never comes.
+     */
+    private fun awakeTick(s:HudState,now:Long):HudState {
+        if(!s.awake)return if(s.sleepIn==0)s else s.copy(sleepIn=0)
+        if(s.holdsDisplay)awakeAt=now
+        val left=awakeMillis-(now-awakeAt)
+        return if(left<=0)s.copy(awake=false,sleepIn=0)
+        else s.copy(sleepIn=if(left<=COUNTDOWN_MS)((left+999)/1000).toInt() else 0)
     }
     suspend fun tickLoop(){while(true){tick();delay(1000)}}
     companion object {
@@ -255,6 +298,12 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         const val REPLY_RESULT_MS=2_000L
         /** How long the player stays after the last touch. */
         const val MEDIA_SHOW_MS=10_000L
+        /** Awake time when the system's screen timeout is unknown. */
+        const val AWAKE_MS=30_000L
+        /** The last seconds of awake show a countdown (4, 3, 2, 1). */
+        const val COUNTDOWN_MS=4_000L
+        /** After a waking touch, the rest of that gesture (other input paths, a swipe's second key) is dropped. */
+        const val WAKE_GAP_MS=600L
         /** Longer than the spread between the three input paths of one gesture, shorter than two real ones. */
         const val MEDIA_KEY_GAP_MS=600L
         /** How long a card stays: longer text stays longer, but never past the maximum (driver safety). */

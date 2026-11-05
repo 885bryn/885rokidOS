@@ -15,7 +15,7 @@ import java.util.UUID
  * same output as Google's turn voice (the glasses' speakers when Hi Rokid routes Bluetooth audio there),
  * and asks other audio to duck rather than pause. Sentences queue behind each other.
  */
-class AndroidAlertSpeaker(context: Context) : AlertSpeaker {
+class AndroidAlertSpeaker(context: Context, private val logText: Boolean = true) : AlertSpeaker {
     private val audio = context.getSystemService(AudioManager::class.java)
     private val attributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
@@ -55,9 +55,13 @@ class AndroidAlertSpeaker(context: Context) : AlertSpeaker {
     private fun say(text: String) {
         if (speaking == 0) audio.requestAudioFocus(focus)
         speaking++
-        Log.i(TAG, "alert_voice \"$text\"")
+        // T3 replies are private: their speaker logs only the length.
+        if (logText) Log.i(TAG, "alert_voice \"$text\"") else Log.i(TAG, "voice ${text.length} chars")
         if (tts.speak(text, TextToSpeech.QUEUE_ADD, null, UUID.randomUUID().toString()) != TextToSpeech.SUCCESS) finished()
     }
+
+    /** Stops what is being said and what waits (a dictation is about to listen). */
+    @Synchronized fun stop() { pending.clear(); if (ready) tts.stop(); if (speaking > 0) { speaking = 0; audio.abandonAudioFocusRequest(focus) } }
 
     override fun shutdown() { tts.stop(); tts.shutdown(); audio.abandonAudioFocusRequest(focus) }
 

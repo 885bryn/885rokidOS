@@ -14,6 +14,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.*
 import com.rokidos885.glasses.input.*
+import com.rokidos885.glasses.state.guiding
+import com.rokidos885.glasses.state.holdsDisplay
 import com.rokidos885.glasses.ui.HudView
 import kotlinx.coroutines.launch
 
@@ -21,6 +23,9 @@ class MainActivity:AppCompatActivity() {
     private lateinit var vm:HudViewModel
     private lateinit var hud:HudView
     private val keyReceiver=KeyReceiver { handleKey(it) }
+    private val screenOff=object:android.content.BroadcastReceiver(){
+        override fun onReceive(context:android.content.Context?,intent:android.content.Intent?){vm.store.onDisplayOff()}
+    }
     private var backGestureAt=0L
     private var backGestureConsumed=true
     override fun onCreate(savedInstanceState:Bundle?) {
@@ -34,6 +39,9 @@ class MainActivity:AppCompatActivity() {
         // Demo only when asked for explicitly (phone "Preview on this phone", captures). Opening from the
         // Rokid home screen used to start the demo trip, which looked like a different navigation.
         vm.initialize(intent.getBooleanExtra("demo",false))
+        // Awake lasts as long as the system's own screen timeout, so the HUD lets go just when the display would sleep.
+        vm.store.awakeMillis=android.provider.Settings.System.getLong(contentResolver,android.provider.Settings.System.SCREEN_OFF_TIMEOUT,
+            com.rokidos885.glasses.state.HudStore.AWAKE_MS).coerceAtLeast(MIN_AWAKE_MS)
         if(BuildConfig.DEBUG && intent.getBooleanExtra("demo",false) && intent.getBooleanExtra("previewExpanded",false))vm.store.previewMode(com.rokidos885.glasses.state.HudMode.Map)
         hud=HudView(this)
         val container=FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
@@ -42,6 +50,8 @@ class MainActivity:AppCompatActivity() {
         container.addView(hud,FrameLayout.LayoutParams(if(previewWidth>0)previewWidth else -1,if(previewHeight>0)previewHeight else -1,Gravity.CENTER))
         setContentView(container)
         ContextCompat.registerReceiver(this,keyReceiver,IntentFilter().apply {KeyType.entries.forEach { addAction(it.action) }},ContextCompat.RECEIVER_EXPORTED)
+        // VERIFY on hardware: that the glasses send SCREEN_OFF when the display sleeps.
+        ContextCompat.registerReceiver(this,screenOff,IntentFilter(android.content.Intent.ACTION_SCREEN_OFF),ContextCompat.RECEIVER_NOT_EXPORTED)
         onBackPressedDispatcher.addCallback(this){handleKey(GlassesKey.BACK)}
         val gestures=GestureDetector(this,object:GestureDetector.SimpleOnGestureListener(){
             override fun onDown(e:MotionEvent)=true
@@ -56,13 +66,17 @@ class MainActivity:AppCompatActivity() {
         hud.setOnTouchListener { _,event -> gestures.onTouchEvent(event) }
         hud.post {vm.onDisplayReady(hud.width,hud.height)}
         lifecycleScope.launch {repeatOnLifecycle(Lifecycle.State.STARTED){vm.store.state.collect {hud.render(it);keepScreenOn(it)}}}
-        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media).
+        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|t3).
         // The big message numbers make the store ignore the demo trip's own messages.
         if(BuildConfig.DEBUG)intent.getStringExtra("previewScene")?.let {scene->
             val n=1_000_000_000L
             val store=vm.store
             store.onMessage(com.rokidos885.protocol.NavStateUpdate(n,com.rokidos885.protocol.NavState.IDLE))
-            if(scene=="media") {
+            if(scene=="t3") {
+                store.onMessage(com.rokidos885.protocol.T3Status(n+1,"Fix the glasses build","claude-opus-5-5",com.rokidos885.protocol.T3State.REPLY,
+                    "Run the unit tests and tell me what fails","All 214 tests pass. The build is green, and I changed nothing."))
+                store.onKey(GlassesKey.SWIPE_BACK)
+            } else if(scene=="media") {
                 store.onMessage(com.rokidos885.protocol.MediaState(n+1,true,"Spotify","Midnight City, a very long track title that wraps","M83",true,0,0))
                 store.onKey(GlassesKey.SWIPE_FORWARD)
             } else {
@@ -102,18 +116,21 @@ class MainActivity:AppCompatActivity() {
         return backGestureConsumed
     }
     /**
-     * Battery: hold the display on only while the phone is actually guiding (link up, not silent).
-     * With the phone connected the HUD stays open without a trip (it is the home for notifications and
-     * other features) but lets the display sleep. Without the phone it closes itself after a while.
+     * Battery: hold the display on while the phone is guiding (link up, not silent), while something else must stay
+     * on screen, and while the HUD counts itself awake (the countdown ends it). With the phone connected the HUD stays
+     * open without a trip (it is the home for notifications and other features) but lets the display sleep. Without
+     * the phone it closes itself after a while.
      */
     private var screenHeld=false
     private var idleSince=0L
     private val idleExit=Runnable {if(!isFinishing){android.util.Log.i("885rokidOSHud","idle_exit");finish()}}
     private fun keepScreenOn(s:com.rokidos885.glasses.state.HudState) {
-        val live=s.navState in HOLD_SCREEN && s.linkConnected && !s.phoneSilent
+        val live=s.guiding
         // VERIFY: whether a card wakes a display that is already asleep; this only keeps an awake one on.
         // A Grok Bot chat holds it too: the tap that ends the chat must not only wake the display.
-        val hold=live || s.notification!=null || s.voice!=null || s.grokBotActive
+        // Awake holds it too: "ACTIVE" and the T3 page promise that the next tap acts, so the display must not sleep
+        // before the countdown ends. Released then, it sleeps at once (the system timeout has run out by then).
+        val hold=s.holdsDisplay || s.awake
         if(hold!=screenHeld) {
             screenHeld=hold
             if(hold)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -124,12 +141,11 @@ class MainActivity:AppCompatActivity() {
     }
     private val demo get()=intent.getBooleanExtra("demo",false)
     private companion object {
-        val HOLD_SCREEN=setOf(com.rokidos885.protocol.NavState.ACTIVE,com.rokidos885.protocol.NavState.REROUTING,
-            com.rokidos885.protocol.NavState.GPS_LOST,com.rokidos885.protocol.NavState.ARRIVED)
+        const val MIN_AWAKE_MS=10_000L
         const val IDLE_EXIT_MS=5*60_000L
     }
     /** Back to the Rokid home screen. The task stays alive, so an active trip resumes where it was. */
     private fun exitToHome(){if(!moveTaskToBack(true))finish()}
     override fun onStart(){super.onStart();vm.onForeground()}
-    override fun onDestroy(){hud.removeCallbacks(idleExit);unregisterReceiver(keyReceiver);super.onDestroy()}
+    override fun onDestroy(){hud.removeCallbacks(idleExit);unregisterReceiver(keyReceiver);unregisterReceiver(screenOff);super.onDestroy()}
 }

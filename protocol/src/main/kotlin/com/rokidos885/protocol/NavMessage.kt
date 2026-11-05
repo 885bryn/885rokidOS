@@ -233,6 +233,26 @@ const val VOICE_COMMAND_ID = "voice-command"
 @Serializable @SerialName("grok_bot")
 data class GrokBotState(override val seq: Long, val active: Boolean) : NavMessage
 
+/**
+ * [VoiceState.notificationId] and [GlassesAction.targetId] of a dictation to T3 Code on the PC (the T3 page). The usual
+ * VOICE_* steps apply, REVIEW included; the phone's send step hands the text to T3 and [T3Status] follows the run.
+ */
+const val T3_CARD_ID = "t3"
+
+/**
+ * The T3 page: the T3 Code [thread] the phone sends to, its [model], the words last sent ([said]) and the run [state].
+ * [text] is the reply (REPLY) or the reason (FAILED, NEEDS_PC). Sent on change and on resync.
+ */
+@Serializable @SerialName("t3")
+data class T3Status(
+    override val seq: Long,
+    val thread: String = "",
+    val model: String = "",
+    val state: T3State = T3State.READY,
+    val said: String = "",
+    val text: String = "",
+) : NavMessage
+
 // ---------------------------------------------------------------- glasses -> phone
 
 @Serializable @SerialName("hello")
@@ -271,6 +291,9 @@ data class ResyncRequest(override val seq: Long, val reason: String = "") : NavM
 
 /** STARTING = tapped, the microphone is not live yet (glasses show it at once); LISTENING = speak now. */
 @Serializable enum class VoicePhase { IDLE, STARTING, LISTENING, REVIEW, SENT, FAILED }
+
+/** READY = nothing under way; SENT = on its way to T3; WORKING = the agent runs; NEEDS_PC = it waits for an answer at the PC. */
+@Serializable enum class T3State { READY, SENT, WORKING, REPLY, FAILED, NEEDS_PC }
 
 @Serializable enum class NavState { IDLE, ROUTING, ACTIVE, REROUTING, GPS_LOST, ARRIVED, ENDED }
 
