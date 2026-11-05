@@ -18,6 +18,7 @@ waking touch from the app, so the display coming on also counts as the wake: one
 **Awake and sleep.** The HUD stays awake for the system's screen timeout (at least 10 s) after the last touch, or after
 a trip, card, voice step or Grok Bot chat lets go of the display. News from T3 starts the time again. The last 4 s
 count down (4, 3, 2, 1) in the top-right corner. Then the HUD lets the display sleep. On a trip the display stays on.
+A card that times out on the empty home screen, untouched, leaves it blank at once, with no "ACTIVE" and no countdown.
 The hold is a screen wake lock that does not restart the system timeout when released, so the display sleeps at once.
 
 ## No trip

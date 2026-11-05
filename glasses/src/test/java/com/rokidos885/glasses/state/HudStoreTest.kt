@@ -307,6 +307,31 @@ class HudStoreTest {
         assertEquals(emptyList<GlassesAction>(),sent)
     }
 
+    @Test fun aCardThatTimesOutOnTheEmptyHomeScreenLeavesItBlankAtOnce() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true)
+        hud.onDisplayOff()
+        // A card wakes the display; when it times out, home is blank: no ACTIVE, no countdown, nothing holds the display.
+        hud.onMessage(com.rokidos885.protocol.PhoneNotification(1,"n1","Messages","Sam","On my way"))
+        hud.onDisplayOn()
+        now+=HudStore.NOTIFICATION_MAX_MS;hud.tick()
+        assertEquals(null,hud.state.value.notification)
+        assertEquals(false,hud.state.value.awake)
+        assertEquals(false,hud.state.value.homeActive)
+        assertEquals(0,hud.state.value.sleepIn)
+        // The next tap only wakes, as on any sleeping display.
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(true,hud.state.value.homeActive)
+        assertEquals(emptyList<GlassesAction>(),sent)
+        // A card closed by a tap is not a timeout: the awake time runs on.
+        hud.onMessage(com.rokidos885.protocol.PhoneNotification(2,"n2","Messages","Sam","Here"))
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.TAP)
+        now+=1_000;hud.tick()
+        assertEquals(null,hud.state.value.notification)
+        assertEquals(true,hud.state.value.awake)
+    }
+
     @Test fun awakeCountsDownFromFourThenTheHudLetsTheDisplaySleep() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
