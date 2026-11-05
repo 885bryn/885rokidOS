@@ -202,3 +202,64 @@ in 01, so 00 is skipped and 01 is "good to know on my way". "I'm" = "I am". 46 w
 - Small sample: 10 phrases from one speaker.
 - On the Nothing A059P (replay of 05.pcm through `VoiceReplayReceiver`): 1040 ms heard "no problem thanks", load 1.9 s,
   decode 247 ms; 80 ms heard "no problem thinks", load 2.0 s, decode 1462 ms. Not yet tested live through the glasses.
+
+## Second-pass speech model on the phone — 2026-11-05
+
+Branch `forge/t3-dictation-pause`, commit `714d6c3`, debug build. Nothing A059P (11.1 GB RAM), wireless ADB. `SttBenchReceiver`
+over the 30 saved recordings (186 s of audio: 10 short replies in `files/accuracy`, 20 T3 dictations in `files/voice-replies`).
+Both engines use 2 threads. The texts stay in the app's private `files/stt-bench.tsv`; only counts are here.
+
+| Engine | Load | Decode, all 30 | Slowest (a 12.4 s dictation) | Memory after (RSS / peak) |
+|---|---|---|---|---|
+| Ours, FastConformer 1040 ms, T3 word list (streaming, fed at full speed) | 2.3 s | 21.4 s | 1.46 s | 352 / 398 MB |
+| Parakeet TDT 0.6B v3 int8 (whole recording) | 4.3 s | 17.1 s | 1.19 s | 1034 / 1034 MB |
+
+- The app was not killed. Parakeet adds about 530 MB while loaded.
+- 20 T3 dictations: our model (with the word list) still has 5 of the known wrong words ("pole", "amogis", "so i saw" and
+  others); Parakeet has none. Our model gave 2 empty texts, Parakeet 2.
+- 10 short replies (`phrases.txt`, 01 scored as "good to know on my way", `tools/stt-bench` scoring): ours 6 of 46 words
+  wrong, Parakeet 6. Same as the PC.
+- Against the TASKS.md rule (not killed, a 12 s dictation in about 3 s or less): **passes**. Decision on building the second
+  pass is with the user.
+
+Whisper small.en int8 (`small.en-*.int8.onnx`, 2 threads), added to `SttBenchReceiver` the same day, because the user finds
+words wrong in message replies too. Same recordings (a later run: 178 s of audio).
+
+| Engine | Load | Short replies wrong (of 46) | Decode of a 5 s reply (median / slowest) | 12 s dictation | Known wrong words in T3 dictations | Memory (RSS / peak) |
+|---|---|---|---|---|---|---|
+| Ours (word list) | 1.9 s | 6 | 0.54 / 0.61 s (while speaking) | 1.3 s | 5 | 370 / 390 MB |
+| Parakeet v3 | 4.6 s | 6 | 0.43 / 0.44 s | 1.1 s | 0 | 1061 MB |
+| Whisper small.en | 3.0 s | **1** | **6.8 / 10.8 s** | 6.3 s | 1 | 1047 / 1193 MB |
+
+- Whisper is the only model that is better on short replies, but with 2 threads each reply waited about 7 s.
+
+Threads and Whisper base.en (`--es engines … --ei threads …`, same recordings). Times vary between runs; small.en with 4
+threads ran twice.
+
+| Engine | Threads | Short replies wrong (of 46) | 5 s reply, median / slowest | 12 s dictation | Known wrong words in T3 dictations | RSS |
+|---|---|---|---|---|---|---|
+| Whisper small.en | 2 | 1 | 6.8 / 10.8 s | 6.3 s | 1 | 1047 MB |
+| Whisper small.en | 4 | **1** | **1.6 / 2.3 s** (repeat: 1.6 / 1.9 s) | 5.7–11.4 s | 1 | 1153 MB |
+| Whisper base.en | 2 | 3 | 0.6 / 1.5 s | 1.9 s | 0 | 666 MB |
+| Whisper base.en | 4 | 3 | 0.5 / 0.6 s | 3.8 s | 0 | 657 MB |
+
+- Short replies: Whisper small.en with 4 threads, about 1.6 s after the speaker stops, 1 wrong word of 46 (ours 6).
+- Long T3 dictations: Whisper small.en is too slow (6–11 s); Parakeet (1.1 s, 0 known wrong words) stays the candidate.
+- Whisper base.en is a cheaper middle: 3 of 46, under 1 s for a reply, 0 known wrong words in the dictations.
+
+## Speech tests with the glasses: replies and T3 instructions — 2026-11-05
+
+Debug buttons on the Glasses tab (`VoiceSpike.REPLY_SET`, `T3_SET`): the user read each phrase into the glasses microphone,
+then the phone scored the three models on the same audio. Waits are after the end of speech (second models load while the
+user speaks).
+
+- First run: 12 of 18 recordings were digital silence (peak 1) from about 30 s on: the glasses display slept (nothing held it),
+  and a sleeping display sends only zeros from the microphone. With each phrase shown on the glasses as a card (display held),
+  all 18 recordings of the second run had speech. Real voice steps hold the display, so they are not affected.
+- Second run, replies (10 phrases, 71 words): ours 4 wrong, Parakeet 7, Whisper small.en 12. Waits: 0.06 / 0.5 / 1.9 s.
+  Whisper misheard short phrases ("Hope you did help anytime", "Ready, lay, start without me").
+- Second run, T3 (8 phrases, 59 words; the user left out "the" in the soy sauce line, scored without it): ours 9 wrong,
+  Parakeet 6 (2 of them "Deep Seek"), Whisper 1. Waits: 0.14 / 0.8 / 2.6 s (slowest 3.1 s).
+- Ours: "poll latest branch and rhonotists", "amojies", "poll request", "cutland". Parakeet fixed pull, run the tests, emojis.
+- Replies over both reply sets (117 words): ours 10, Parakeet 13, Whisper 13. No second model is better for replies.
+- Decision (user, 2026-11-05): second pass for T3 dictation with Whisper small.en for now; none for message replies.

@@ -316,6 +316,11 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             voice=s.voice?.takeIf {!resultOver(s,now)},
             mediaShown=s.mediaShown && now-s.mediaShownAt<MEDIA_SHOW_MS,
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
+                // A card that timed out on the empty home screen leaves it blank at once: no "ACTIVE" and countdown after
+                // it (user request 2026-11-05). A card closed by a touch, or after a reply on it, is not a timeout: the
+                // awake time runs then.
+                .let {if(s.notification!=null && it.notification==null && s.voice==null && it.voice==null && idle(it) && !it.t3Page && !it.mediaShown &&
+                    !it.grokBotActive)it.copy(awake=false,sleepIn=0) else it}
                 .let {awakeTick(it,now)}
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
             // Otherwise an unchanged state is not re-emitted, so an idle HUD does not redraw every second.

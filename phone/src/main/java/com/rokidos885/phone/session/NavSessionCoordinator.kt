@@ -20,6 +20,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     replySender:com.rokidos885.phone.voice.ReplySender?=null,
     voiceWork:kotlin.coroutines.CoroutineContext=kotlin.coroutines.EmptyCoroutineContext,
     voiceAudio:((ByteArray)->Unit)?=null,
+    /** Reads a finished voice reply again with a more accurate model ([com.rokidos885.phone.voice.OfflineSecondPass]). */
+    secondPass:com.rokidos885.phone.voice.SecondPass?=null,
     private val openGrokBot:(()->String?)?=null,
     /** True while a Grok Bot chat runs, so the same gesture closes it ([com.rokidos885.phone.voice.GrokBot.running]). */
     private val grokBotRunning:()->Boolean={false},
@@ -43,7 +45,7 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     val detour=offer.asStateFlow()
     private var preferences=UserSettings()
     // Heavy speech work runs off the main thread; each step hops back to it, in order, before it is sent.
-    private val voice=if(transcriber!=null && replySender!=null)com.rokidos885.phone.voice.VoiceReplyController(scope,link,transcriber,replySender,work=voiceWork,onAudio=voiceAudio) {phase,id,text->
+    private val voice=if(transcriber!=null && replySender!=null)com.rokidos885.phone.voice.VoiceReplyController(scope,link,transcriber,replySender,work=voiceWork,onAudio=voiceAudio,secondPass=secondPass) {phase,id,text->
         val message=VoiceState(seq.next(),phase,id,text)
         scope.launch {link.send(message)}
     } else null

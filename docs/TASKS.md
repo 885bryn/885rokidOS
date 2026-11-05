@@ -13,6 +13,33 @@ Android lint: zero errors (pinned-version/target warnings remain).
 Live WzSabre exchange and full drive acceptance checks have not been run. Glasses launch,
 HUD delivery, native orientation, and tap return events have been checked on hardware.
 
+## Open now: speech tests on the phone (from 2026-11-05)
+
+Branch `forge/t3-dictation-pause`, PR #11. Written on a PC that cannot install on the phone (other signing key, no
+`local.properties`, no `jniLibs`). Do these steps on the build machine. Background: `docs/VOICE.md`, sections
+"Word list for T3 dictation" and "Second pass". Phone: Nothing A059P over wireless ADB.
+
+1. [x] `git fetch` and check out `forge/t3-dictation-pause`. Run the verify command (README). Install `:phone` (debug).
+2. [ ] Ask the user to run the PR #11 checks with the glasses (list in the PR). The new ones: a T3 dictation with "DeepSeek"
+       or "GitHub" comes out right, and T3 dictation does not feel slower (it now uses beam search with a word list).
+3. [x] Start `SttBenchReceiver` once, so the app makes its model folder:
+       `adb shell am broadcast -n com.rokidos885.phone/com.rokidos885.phone.debug.SttBenchReceiver`.
+       Watch `adb logcat -s 885rokidOSBench` until `done`. It times our streaming model with the T3 word list, and logs
+       "Parakeet missing".
+4. [x] Download `sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2` (465 MB) from
+       `https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/`. Unpack it in a new, empty folder under `.tmp/`.
+       Push `encoder.int8.onnx`, `decoder.int8.onnx`, `joiner.int8.onnx` and `tokens.txt` to
+       `/sdcard/Android/data/com.rokidos885.phone/files/stt/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/`
+       (Git Bash: `MSYS_NO_PATHCONV=1`). Do not make the folder with `adb shell mkdir` (docs/VOICE.md).
+5. [x] Run step 3 again. Write the logged load time, decode totals and memory (RSS and peak) in
+       `docs/LOCAL_TEST_RESULTS.md`. The texts are in `files/stt-bench.tsv` (private folder). They are the user's speech:
+       compare them, but put them in docs or commits only with the user's agreement.
+6. [ ] Decide with the user. Phone results (2026-11-05, `docs/LOCAL_TEST_RESULTS.md`): passes; 1.2 s for a 12 s
+       dictation, +530 MB while loaded. A Parakeet second pass for T3 dictation is worth building if the app is not killed and the
+       decode of a 12 s dictation takes about 3 s or less (load the model while the user speaks, as for our model).
+       If yes: build it on a new branch (`docs/VOICE.md`, "Second pass", has the design). If no: note why in `docs/VOICE.md`.
+7. [ ] Optional: re-run the PC scores with `tools/stt-bench` (README there), with new recordings if the user makes them.
+
 ## M0 — Project boots
 - [x] Generate Gradle wrapper (8.13), resolve dependencies; fix invalid bridge version and Maps duplicate classes.
 - [ ] Download CxrlSample.zip (link in Rokid docs → Quick Start), unzip into `vendor/rokid-samples/`.

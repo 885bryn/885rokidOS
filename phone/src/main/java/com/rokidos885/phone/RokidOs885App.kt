@@ -83,6 +83,7 @@ class RokidOs885App : Application() {
             replySender = com.rokidos885.phone.voice.ReplySender {id,text->if(id==com.rokidos885.protocol.T3_CARD_ID)t3.send(text) else replies.reply(id,text)},
             voiceWork = Dispatchers.Default,
             // Debug builds keep the last spoken reply's audio on the phone (private folder) to diagnose recognition.
+            secondPass = com.rokidos885.phone.voice.OfflineSecondPass(this),
             voiceAudio = if(BuildConfig.DEBUG)lastVoiceRecorder(java.io.File(filesDir,"voice-last.pcm")) else null,
             openGrokBot = {com.rokidos885.phone.voice.GrokBot.open(this)},
             grokBotRunning = {com.rokidos885.phone.voice.GrokBot.running(this)},

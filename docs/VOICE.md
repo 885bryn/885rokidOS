@@ -23,7 +23,7 @@ recording "hello this is the test" came back exactly.
 1. **Native libraries.** Download `sherpa-onnx-v2.0.1-android.tar.bz2` (45.3 MB) from
    `https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/`. Copy `jniLibs/arm64-v8a/libonnxruntime.so` and
    `libsherpa-onnx-jni.so` to `phone/src/main/jniLibs/arm64-v8a/` (git-ignored). The other files are not needed.
-2. **Kotlin interface.** Committed in `phone/src/main/java/com/k2fsa/sherpa/onnx/` (five files from
+2. **Kotlin interface.** Committed in `phone/src/main/java/com/k2fsa/sherpa/onnx/` (seven files from
    `sherpa-onnx/kotlin-api/` at tag v2.0.1, unchanged; the package name must stay `com.k2fsa.sherpa.onnx`
    because the native library looks classes up by that name).
 3. **Model.** Download `sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-1040ms-int8.tar.bz2` from
@@ -46,7 +46,8 @@ recording "hello this is the test" came back exactly.
    "TAP reply by voice". During a trip cards stay glances. WeChat has no reply box (log: `reply available=false`).
 2. **Tap** starts it (`VOICE_START`). The phone opens the glasses microphone and `VoiceReplyController` feeds the audio to
    `SherpaSpeech`; the words so far go to the glasses (`VoiceState LISTENING`). It stops when you pause for 1.4 s,
-   when you tap (`VOICE_STOP`), or after 15 s.
+   when you tap (`VOICE_STOP`), or after 15 s. T3 dictation (`T3_CARD_ID`) waits for a 5 s pause and stops after
+   60 s, so a pause to think in the middle of a sentence does not end it (`ListenLimits`).
 3. **Check screen** (`REVIEW`): the text in the user's style (`Dictation.format`: capital first letter and "I", no punctuation) and three rows. **Swipe** moves, **tap** acts:
    Send (`VOICE_SEND`: `NotificationReplier.reply` fills the app's reply box and fires it), Redo (listen again), Cancel.
    **Double tap** cancels at any step and is consumed by the HUD, so it does not leave to the Rokid menu.
@@ -116,3 +117,58 @@ glasses (Glasses tab, "Accuracy test", debug builds) and scored on the PC agains
 Built in: `SpeechAudio.preEmphasize` with c = 0.8 (middle of the good range). Clean recordings still decode the same.
 Ten phrases from one speaker is a small sample: re-run the Accuracy test after changes, and add phrases that go wrong.
 Other levers, not yet tried: a more careful model (NeMo streaming 1040 ms, 104 MB; Parakeet-TDT-CTC 110M, 104 MB), and a word list.
+
+Lost words (2026-11-05, user report: "soy sauce" often missing in T3 dictation). Two causes in the app, fixed:
+- The controller listened to `link.audio` only after `startAudio`, and that flow keeps nothing for a late listener, so the
+  first chunks could be lost. It now listens first and queues every chunk; chunks still queued at a tap are decoded too.
+- `finish` padded 0.8 s of silence, less than one 1040 ms chunk, so a word said just before a tap could stay undecoded.
+  The pad is now 2.1 s (`SherpaSpeech.TAIL_PAD_MS`).
+Not fixed by this: the glasses mic barely carries "s" sounds (see above), so "soy sauce" can still come out wrong. Next
+step: record the phrases that fail (debug builds keep the last one as `files/voice-last.pcm`) and score them on the PC
+against a word list (sherpa-onnx hotwords) and the larger models.
+
+Word list for T3 dictation (2026-11-05). sherpa-onnx "hotwords" favour given words. Tested on the PC with the 1040 ms model, the
+app's settings, the ten Accuracy test phrases and the last 20 voice replies from the phone (`files/voice-replies`):
+
+| Settings | Ten short replies, wrong words (of 46) | 20 real dictations |
+|---|---|---|
+| Greedy (as before) | 6 | "deep sea" / "deep seak", "amoges" |
+| Beam search, 4 paths, no list | 6 | same |
+| Beam + the exact ten phrases, boost 1.5 / 3 | 6 / 6 | — |
+| Beam + the exact ten phrases, boost 5 / 8 / 12 | 8–14 / 18–22 / 181–400: the model makes up phrases | — |
+| **Beam, 8 paths + `SpeechVocabulary.T3_WORDS`, boost 2** | **6** | **"deepseek" (2 of 2)**, no new errors |
+
+- The short replies go wrong on weak audio, not on rare words: even the exact phrase did not fix "love you too" ("let me too").
+  So message replies keep greedy decoding with no list.
+- Names gain: T3 dictation (`ListenLimits.DICTATION`) uses the list. With a boost of 3, "emojis" also came right, but
+  "stretch" became "stread".
+- Not fixed by any list: "pole latest" (pull latest), "japanese so i saw" (soy sauce), "stark a stretch" (start a new thread).
+- sherpa-onnx needs a `bpe.vocab` to split the hotwords; the NeMo model has none. `SherpaSpeech` writes one from `tokens.txt`
+  (`SpeechVocabulary.bpeVocab`) and `hotwords.txt` next to the model. No setup step. If the write fails, dictation runs without the list.
+- Cost: beam search decoded about 1.8 times slower on the PC. Not yet measured on the phone.
+- Pre-emphasis on the 1040 ms model: c = 0.7 gave 5 wrong words, 0.6 and 0.75–0.95 gave 6. One word, so 0.8 stays.
+- The list was made from the same recordings it was tested on. Re-check it on new dictations.
+
+## Second pass: the models OpenWhispr uses (2026-11-05, PC only)
+
+OpenWhispr is a desktop dictation app (Windows, Mac, Linux; not Android). Its local engines are Whisper and NVIDIA Parakeet
+(through sherpa-onnx, as here), so its models were scored against ours with `tools/stt-bench/compare.py`. Same PC, 2 threads.
+"Known errors" are the nine wrong words of our model in the 20 dictations: "deep sea" / "deep seak", "pole" / "poor" /
+"told" (pull), "amoges" / "amogis" (emojis), "so i saw" (soy sauce), "stark a stretch" (start a thread).
+
+| Model | Size | Ten short replies, wrong (of 46) | Known errors fixed (of 9) | New errors | Time, 20 dictations |
+|---|---|---|---|---|---|
+| **Ours, FastConformer 1040 ms** (streaming) | 131 MB | 6 | 0 | — | 4–6 s |
+| Whisper base.en | 433 MB | 3 | 6 | 2 | 7–13 s |
+| Whisper small.en, no pre-emphasis | 1.3 GB (370 MB int8) | **1** | **7** | 1 | 21–40 s |
+| Parakeet TDT 0.6B v3 int8 | 641 MB | 6 | 6 | 2–3 (no text for some 1–2 word clips) | 6 s |
+
+- Whisper and Parakeet read the whole recording after the speaker stops: no words on the glasses while speaking, no end of
+  speech. So they can only be a **second pass**: our model streams the words and finds the end, then the second model
+  decodes the whole recording again and its text goes to the check screen.
+- Candidate: **Parakeet v3 for T3 dictation only**, on the raw audio (no pre-emphasis), keeping our text when Parakeet gives
+  none or much less. It was as fast as our model on the PC. Whisper small.en was the most accurate but 3–6 times slower, and
+  Whisper can invent text on silence.
+- No model heard "pull latest" in the two 4.6 s clips ("paul", "poll"): likely the audio.
+- **Not yet measured on the phone:** load time, decode time and memory. `SttBenchReceiver` (debug builds) measures them; see
+  `docs/TASKS.md`, "Open now". Decide on the second pass only after that.
