@@ -202,3 +202,21 @@ in 01, so 00 is skipped and 01 is "good to know on my way". "I'm" = "I am". 46 w
 - Small sample: 10 phrases from one speaker.
 - On the Nothing A059P (replay of 05.pcm through `VoiceReplayReceiver`): 1040 ms heard "no problem thanks", load 1.9 s,
   decode 247 ms; 80 ms heard "no problem thinks", load 2.0 s, decode 1462 ms. Not yet tested live through the glasses.
+
+## Second-pass speech model on the phone — 2026-11-05
+
+Branch `forge/t3-dictation-pause`, commit `714d6c3`, debug build. Nothing A059P (11.1 GB RAM), wireless ADB. `SttBenchReceiver`
+over the 30 saved recordings (186 s of audio: 10 short replies in `files/accuracy`, 20 T3 dictations in `files/voice-replies`).
+Both engines use 2 threads. The texts stay in the app's private `files/stt-bench.tsv`; only counts are here.
+
+| Engine | Load | Decode, all 30 | Slowest (a 12.4 s dictation) | Memory after (RSS / peak) |
+|---|---|---|---|---|
+| Ours, FastConformer 1040 ms, T3 word list (streaming, fed at full speed) | 2.3 s | 21.4 s | 1.46 s | 352 / 398 MB |
+| Parakeet TDT 0.6B v3 int8 (whole recording) | 4.3 s | 17.1 s | 1.19 s | 1034 / 1034 MB |
+
+- The app was not killed. Parakeet adds about 530 MB while loaded.
+- 20 T3 dictations: our model (with the word list) still has 5 of the known wrong words ("pole", "amogis", "so i saw" and
+  others); Parakeet has none. Our model gave 2 empty texts, Parakeet 2.
+- 10 short replies (`phrases.txt`, 01 scored as "good to know on my way"): ours 6 of 46 words wrong, Parakeet 7. Same as the PC.
+- Against the TASKS.md rule (not killed, a 12 s dictation in about 3 s or less): **passes**. Decision on building the second
+  pass is with the user.
