@@ -12,17 +12,18 @@ import com.rokidos885.protocol.T3_CARD_ID
 import java.io.File
 
 /**
- * The second pass on the phone (measured 2026-11-05, docs/LOCAL_TEST_RESULTS.md): Parakeet TDT 0.6B v3 for T3 dictation
- * (about 1 s for 12 s, fixes the known wrong words) and Whisper small.en with 4 threads for message replies (about 1.6 s,
- * 1 wrong word of 46 against 6). Each loads for one voice step and is freed after it (about 1 GB while loaded). The
- * model files are put in `files/stt/<name>/` by hand, as for the streaming model; without them there is no second pass.
- * Both read the raw audio: they did as well or better without pre-emphasis.
+ * The second pass on the phone (docs/LOCAL_TEST_RESULTS.md, 2026-11-05). T3 dictation only, with Whisper small.en and 4
+ * threads (user choice): in the glasses test it made 1 wrong word of 59 (ours 9, Parakeet v3 6), with about 2.6 s of wait
+ * after a short instruction but 6–11 s after a 12 s one. Message replies have none: no model beat ours there (117 words:
+ * ours 10, Parakeet 13, Whisper 13). The model loads for one voice step and is freed after it (about 1 GB while loaded).
+ * Its files are put in `files/stt/<name>/` by hand, as for the streaming model; without them there is no second pass.
+ * Both models read the raw audio: they did as well or better without pre-emphasis.
  */
 class OfflineSecondPass(private val context: Context) : SecondPass {
-    /** The two models; each is the best for one kind of speech. */
+    /** The two candidates; the speech tests (VoiceSpike) score both. */
     enum class Model { PARAKEET, WHISPER }
 
-    override fun load(notificationId: String): Rereader? = open(if (notificationId == T3_CARD_ID) Model.PARAKEET else Model.WHISPER)
+    override fun load(notificationId: String): Rereader? = if (notificationId == T3_CARD_ID) open(Model.WHISPER) else null
 
     /** Loads [model], or null when its files are not on the phone. Slow: call it off the main thread. */
     fun open(model: Model): Rereader? {

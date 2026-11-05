@@ -262,3 +262,4 @@ user speaks).
   Parakeet 6 (2 of them "Deep Seek"), Whisper 1. Waits: 0.14 / 0.8 / 2.6 s (slowest 3.1 s).
 - Ours: "poll latest branch and rhonotists", "amojies", "poll request", "cutland". Parakeet fixed pull, run the tests, emojis.
 - Replies over both reply sets (117 words): ours 10, Parakeet 13, Whisper 13. No second model is better for replies.
+- Decision (user, 2026-11-05): second pass for T3 dictation with Whisper small.en for now; none for message replies.
