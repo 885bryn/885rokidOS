@@ -47,6 +47,11 @@ You need:
 Copy `local.properties.example` to `local.properties` and set `sdk.dir` and `MAPS_API_KEY`. The key is
 never committed. For police reports, install the [WzSabre](https://wzsabre.rocks/) plugin on the phone.
 
+For Grok Bot from the glasses, turn on **Accessibility → 885rokidOS screen lock** on the phone, so it locks again
+after the start. Android can turn it off; to let the app turn it on again by itself, run once:
+`adb shell pm grant com.rokidos885.phone android.permission.WRITE_SECURE_SETTINGS` (kept across updates, lost on
+uninstall).
+
 To code from the glasses at any time, set up a computer that stays on: [Always-on T3 host](docs/ALWAYS-ON-HOST.md).
 
 ## Build and test

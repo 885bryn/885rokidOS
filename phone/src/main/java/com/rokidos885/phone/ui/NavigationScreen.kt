@@ -154,8 +154,25 @@ fun SettingsScreen(app:RokidOs885App) {
         Text(if(installed)"WzSabre is installed. It needs no setup; keep it exempt from battery optimization." else "Install WzSabre from wzsabre.rocks for police reports.",color=Color.LightGray)
         Text(if(settings.police)policeStatus else "Police reports disabled",color=Color.LightGray)
         Text("Camera data uses WzSabre's ExCam database. Police report availability depends on the plugin and its report sources.",color=Color.LightGray)
+        ScreenLockSettings(app)
         T3Settings(app)
     }
+}
+
+/** Whether the phone locks again after the glasses start Grok Bot from a pocket (ScreenLockService). */
+@Composable
+private fun ScreenLockSettings(app:RokidOs885App) {
+    // Re-read on every composition, and turn it on again when allowed: Android can turn the service off.
+    val on=com.rokidos885.phone.voice.ScreenLockService.ensureOn(app)
+    val auto=com.rokidos885.phone.voice.ScreenLockService.canTurnOn(app)
+    Text("Phone screen lock",style=MaterialTheme.typography.headlineMedium)
+    Text(if(on)"Screen lock: on. The phone locks again after the glasses start Grok Bot."
+        else "Screen lock: off. After the glasses start Grok Bot, the phone screen stays on.",color=if(on)Color.LightGray else Color(0xFFFFB4A9))
+    if(!on)OutlinedButton(onClick={app.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))}){Text("Turn on: Accessibility, 885rokidOS screen lock")}
+    Text(if(auto)"It turns itself on again if Android turns it off."
+        else "To make it turn itself on again, run once on a computer: adb shell pm grant com.rokidos885.phone android.permission.WRITE_SECURE_SETTINGS",
+        color=Color.LightGray)
 }
 
 /** T3 Code on the PC for the glasses' T3 page: address (Tailscale HTTPS), sign-in, one thread. */

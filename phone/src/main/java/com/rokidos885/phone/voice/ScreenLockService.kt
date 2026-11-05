@@ -1,7 +1,10 @@
 package com.rokidos885.phone.voice
 
 import android.accessibilityservice.AccessibilityService
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.Settings
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
@@ -12,6 +15,9 @@ import android.view.accessibility.AccessibilityEvent
  * in a pocket. A normal app cannot turn the screen off; an accessibility service can ([GLOBAL_ACTION_LOCK_SCREEN]). The user
  * turns it on in Settings, Accessibility; without it nothing happens. Smart Lock stays on after this lock, and the Grok Bot
  * voice chat keeps running with the screen off (tested 2026-11-02, docs/LOCAL_TEST_RESULTS.md). Reads no screen content.
+ *
+ * Android can turn the service off (seen 2026-11-05 after app reinstalls). With WRITE_SECURE_SETTINGS, granted once by adb
+ * (`adb shell pm grant com.rokidos885.phone android.permission.WRITE_SECURE_SETTINGS`), [ensureOn] turns it on again.
  */
 class ScreenLockService : AccessibilityService() {
     override fun onServiceConnected() { running = this }
@@ -32,7 +38,8 @@ class ScreenLockService : AccessibilityService() {
          * [MAX_WAIT_MS] when nothing records (a second tap that ended the chat). A glasses start means a pocket, so lock anyway.
          */
         fun lockAfterGrokBotStarts(context: Context) {
-            if (running == null) return
+            // Just turned on again, the service may not be bound yet; it is by the time of the lock (1 s or more).
+            if (running == null && !enabled(context)) return
             val audio = context.applicationContext.getSystemService(AudioManager::class.java)
             val start = System.currentTimeMillis()
             main.removeCallbacksAndMessages(null)
@@ -44,6 +51,32 @@ class ScreenLockService : AccessibilityService() {
                 }
             }
             main.postDelayed(::check, POLL_MS)
+        }
+
+        /** True when the service is on in Accessibility settings (bound or about to be). */
+        fun enabled(context: Context): Boolean {
+            val ours = ComponentName(context, ScreenLockService::class.java)
+            return Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+                .split(':').any { ComponentName.unflattenFromString(it) == ours }
+        }
+
+        /** True when adb granted WRITE_SECURE_SETTINGS, so [ensureOn] can turn the service on by itself. */
+        fun canTurnOn(context: Context) =
+            context.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
+
+        /** Turns the service on again when Android turned it off and [canTurnOn]; keeps the other services. True when on. */
+        fun ensureOn(context: Context): Boolean {
+            if (enabled(context)) return true
+            if (!canTurnOn(context)) return false
+            val resolver = context.contentResolver
+            val others = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+                .split(':').filter { it.isNotBlank() }
+            val ours = ComponentName(context, ScreenLockService::class.java).flattenToString()
+            runCatching {
+                Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (others + ours).joinToString(":"))
+                Settings.Secure.putInt(resolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+            }.onFailure { android.util.Log.w("885rokidOSLock", "screen lock not turned on: ${it.javaClass.simpleName}") }
+            return enabled(context)
         }
     }
 }

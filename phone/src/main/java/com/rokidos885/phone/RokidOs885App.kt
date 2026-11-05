@@ -51,6 +51,8 @@ class RokidOs885App : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Android can turn the screen lock service off; turn it on again when adb allowed that once.
+        com.rokidos885.phone.voice.ScreenLockService.ensureOn(this)
         glassesLink = CxrGlassesLink(this)
         navEngine = GoogleNavigationEngine(this)
         routesApi = RoutesApiClient(BuildConfig.ROUTES_API_KEY,androidPackage=packageName,androidCert=RoutesApiClient.signingCertificate(this))
