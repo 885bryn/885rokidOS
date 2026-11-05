@@ -65,6 +65,92 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
         say("Done: ${ACCURACY_PHRASES.size} phrases saved. Tell Claude.")
     }
 
+    /**
+     * Debug: a fixed set of phrases for the second-pass test (2026-11-05). [dir] is under files/, [limits] are those of the
+     * real feature (so our model decodes as it does there), [seconds] is the recording time of each phrase.
+     */
+    class TestSet(val name: String, val dir: String, val seconds: Int, val limits: ListenLimits, val phrases: List<String>)
+
+    /**
+     * Debug: records [set] like [recordAccuracySet] (the phone shows each phrase, the glasses microphone records it), then
+     * [scoreSet]. Recordings and results stay in the app's private folder; nothing goes to logcat but counts and times.
+     */
+    suspend fun recordAndScore(set: TestSet, say: (String) -> Unit, line: (String) -> Unit) {
+        if (link.state.value != LinkState.Ready) { say("Glasses are not connected."); return }
+        val dir = File(context.filesDir, set.dir).apply { deleteRecursively(); mkdirs() }
+        File(dir, "phrases.txt").writeText(set.phrases.mapIndexed { i, p -> "%02d\t%s".format(i, p) }.joinToString("\n"))
+        for ((i, phrase) in set.phrases.withIndex()) {
+            say("Get ready…  ${i + 1}/${set.phrases.size}")
+            delay(1_200)
+            say("${i + 1}/${set.phrases.size}  Say now (${set.seconds} s):  \"$phrase\"")
+            val file = File(dir, "%02d.pcm".format(i))
+            val ok = file.outputStream().use { out ->
+                coroutineScope {
+                    val reader = launch(Dispatchers.IO) { link.audio.collect { out.write(it) } }
+                    if (!link.startAudio()) { reader.cancel(); return@coroutineScope false }
+                    delay(set.seconds * 1000L)
+                    link.stopAudio()
+                    delay(400)
+                    reader.cancel()
+                    true
+                }
+            }
+            if (!ok) { say("The glasses refused the microphone."); return }
+        }
+        scoreSet(set, say, line)
+    }
+
+    /**
+     * Debug: decodes the recordings of [set] with our streaming model (as the feature does), Parakeet v3 and Whisper small.en,
+     * one model at a time, and shows each model's wrong words of all words, its median wait after the end, and the phrases
+     * any model got wrong. The second-pass models count only their decode: they load while the user speaks.
+     */
+    suspend fun scoreSet(set: TestSet, say: (String) -> Unit, line: (String) -> Unit) = withContext(Dispatchers.Default) {
+        val dir = File(context.filesDir, set.dir)
+        val audio = set.phrases.indices.map { File(dir, "%02d.pcm".format(it)).takeIf(File::isFile)?.readBytes() }
+        if (audio.any { it == null }) { say("Record the ${set.name} first."); return@withContext }
+        val heard = linkedMapOf<String, List<Pair<String, Long>>>()
+        say("Scoring: our model…")
+        val modelDir = SherpaSpeech.modelDir(context)
+        if (modelDir != null) SherpaSpeech(modelDir, set.limits).use { engine ->
+            heard["Ours"] = audio.map { pcm ->
+                engine.utterance().use { u ->
+                    var at = 0
+                    // Fed as it arrives (100 ms chunks); our model decodes while the user speaks, so only finish() is a wait.
+                    while (at < pcm!!.size) { val end = minOf(at + 3_200, pcm.size); u.accept(pcm.copyOfRange(at, end)); at = end }
+                    val t = System.currentTimeMillis()
+                    u.finish() to System.currentTimeMillis() - t
+                }
+            }
+        }
+        val second = OfflineSecondPass(context)
+        for ((label, model) in listOf("Parakeet" to OfflineSecondPass.Model.PARAKEET, "Whisper" to OfflineSecondPass.Model.WHISPER)) {
+            say("Scoring: $label…")
+            val reader = runCatching { second.open(model) }.getOrNull() ?: continue
+            reader.use { r -> heard[label] = audio.map { pcm -> val t = System.currentTimeMillis(); r.read(pcm!!) to System.currentTimeMillis() - t } }
+        }
+        val total = set.phrases.sumOf { WordErrors.words(it).size }
+        val results = StringBuilder("engine\tphrase\twrong\tms\ttext\n")
+        val summary = heard.map { (label, texts) ->
+            val wrong = texts.mapIndexed { i, (text, ms) ->
+                WordErrors.count(set.phrases[i], text).also { results.append("$label\t$i\t$it\t$ms\t$text\n") }
+            }.sum()
+            val wait = texts.map { it.second }.sorted()[texts.size / 2]
+            Log.i(TAG, "test ${set.dir} $label wrong=$wrong/$total median_ms=$wait")
+            "$label $wrong/$total wrong, ${"%.1f".format(wait / 1000.0)} s"
+        }
+        File(dir, "results.tsv").writeText(results.toString())
+        for (i in set.phrases.indices) {
+            val got = heard.mapValues { (_, texts) -> texts[i].first }
+            if (got.values.all { WordErrors.count(set.phrases[i], it) == 0 }) continue
+            line("${i + 1}. \"${set.phrases[i]}\"\n" + got.entries.joinToString("\n") { (label, text) ->
+                val n = WordErrors.count(set.phrases[i], text)
+                "   $label${if (n == 0) " ✓" else " ($n)"}: ${Dictation.format(text)}"
+            })
+        }
+        say("${set.name}: " + summary.joinToString(" · ") + if (heard.size < 3) "  (a model is missing on the phone)" else "")
+    }
+
     /** Debug: transcribe the saved recording again (adb am broadcast to VoiceReplayReceiver). */
     suspend fun replay(say: (String) -> Unit) {
         val file = File(context.filesDir, "voice-spike.pcm")
@@ -108,9 +194,23 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
         return peak to (if (n == 0) 0 else kotlin.math.sqrt(sum / n).toInt())
     }
 
-    private companion object {
-        const val TAG = "885rokidOSVoice"
-        val ACCURACY_PHRASES = listOf(
+    companion object {
+        private const val TAG = "885rokidOSVoice"
+        /** Everyday message replies, with the kinds of words our model got wrong. */
+        val REPLY_SET = TestSet("reply test", "test-replies", 6, ListenLimits.REPLY, listOf(
+            "hey are we still on for dinner tonight", "I'm stuck in traffic be there in twenty minutes",
+            "can you pick up some milk on the way home", "sounds good let me know when you leave",
+            "thanks for the birthday wishes", "I already sent the photos to your email", "running late start without me",
+            "what time does the movie start", "happy to help anytime", "I'll call you back after my meeting",
+        ))
+        /** Instructions to T3, with the words that went wrong in real dictations (pull, emojis, DeepSeek, thread). */
+        val T3_SET = TestSet("T3 test", "test-t3", 10, ListenLimits.DICTATION, listOf(
+            "pull latest branch and run the tests", "add emojis to the notification card",
+            "ask DeepSeek to review the pull request on GitHub", "start a thread about the soy sauce recipe",
+            "make the notification page wider and merge it", "fix the Kotlin build error in the glasses app",
+            "commit merge and push to master", "install the phone app over wireless debugging",
+        ))
+        private val ACCURACY_PHRASES = listOf(
             "good to know", "on my way", "I will call you later", "can we talk tomorrow", "sounds good see you there",
             "no problem thanks", "I am running about ten minutes late", "yes that works for me", "let me check and get back to you",
             "love you too",

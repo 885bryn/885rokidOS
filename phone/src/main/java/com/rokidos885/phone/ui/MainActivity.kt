@@ -57,6 +57,19 @@ class MainActivity:ComponentActivity() {
             finally {voiceBusy.value=false}
         }
     }
+    /** Debug: the second-pass test (VoiceSpike.REPLY_SET / T3_SET): record, then score the three models on the phone. */
+    private val voiceResults=androidx.compose.runtime.mutableStateListOf<String>()
+    private fun speechTest(set:com.rokidos885.phone.voice.VoiceSpike.TestSet) {
+        if(voiceBusy.value)return
+        val permission=androidx.core.content.ContextCompat.checkSelfPermission(this,android.Manifest.permission.RECORD_AUDIO)
+        if(permission!=android.content.pm.PackageManager.PERMISSION_GRANTED){recordAudio.launch(android.Manifest.permission.RECORD_AUDIO);return}
+        voiceBusy.value=true;voiceResults.clear()
+        lifecycleScope.launch {
+            try {com.rokidos885.phone.voice.VoiceSpike(applicationContext,app.glassesLink).recordAndScore(set,{voiceStatus.value=it},{line->lifecycleScope.launch {voiceResults.add(line)}})}
+            catch(e:Exception){voiceStatus.value="Test failed: ${e.javaClass.simpleName}"}
+            finally {voiceBusy.value=false}
+        }
+    }
     private fun startVoiceTest(){
         if(voiceBusy.value)return // a second start while one runs makes the glasses refuse the stream
         voiceBusy.value=true
@@ -88,7 +101,8 @@ class MainActivity:ComponentActivity() {
                     2->SettingsScreen(app)
                     else->SetupScreen(app.glassesLink,events,
                     authorize={app.glassesLink.authorize(this@MainActivity)},connect=app.glassesLink::connect,installWithRokid={installWithHiRokidOpen()},
-                    openRokid={openRokid()},test={sendHudTest()},voiceTest={voiceTest()},accuracySet={accuracySet()},voiceStatus=voiceStatus.value,voiceBusy=voiceBusy.value,export={exportHud.launch("885rokidOS-HUD.apk")},preview={startActivity(Intent().setClassName(BuildConfig.GLASSES_PACKAGE,BuildConfig.GLASSES_ACTIVITY).putExtra("demo",true).putExtra("phonePreview",true))})
+                    openRokid={openRokid()},test={sendHudTest()},voiceTest={voiceTest()},accuracySet={accuracySet()},voiceStatus=voiceStatus.value,voiceBusy=voiceBusy.value,
+                    replyTest={speechTest(com.rokidos885.phone.voice.VoiceSpike.REPLY_SET)},t3Test={speechTest(com.rokidos885.phone.voice.VoiceSpike.T3_SET)},voiceResults=voiceResults,export={exportHud.launch("885rokidOS-HUD.apk")},preview={startActivity(Intent().setClassName(BuildConfig.GLASSES_PACKAGE,BuildConfig.GLASSES_ACTIVITY).putExtra("demo",true).putExtra("phonePreview",true))})
                     }
                     }
                 }
@@ -142,7 +156,7 @@ class MainActivity:ComponentActivity() {
 }
 
 @Composable
-private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,connect:()->Unit,installWithRokid:()->Unit,openRokid:()->Unit,test:()->Unit,voiceTest:()->Unit,accuracySet:()->Unit,voiceStatus:String,voiceBusy:Boolean,export:()->Unit,preview:()->Unit) {
+private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,connect:()->Unit,installWithRokid:()->Unit,openRokid:()->Unit,test:()->Unit,voiceTest:()->Unit,accuracySet:()->Unit,voiceStatus:String,voiceBusy:Boolean,replyTest:()->Unit,t3Test:()->Unit,voiceResults:List<String>,export:()->Unit,preview:()->Unit) {
     val state by link.state.collectAsState()
     var environment by remember {mutableStateOf<EnvironmentStatus?>(null)}
     var checkError by remember {mutableStateOf(false)}
@@ -166,7 +180,11 @@ private fun SetupScreen(link:GlassesLink,events:List<String>,authorize:()->Unit,
             Button(onClick=authorize,enabled=!busy && environment is EnvironmentStatus.Ok){Text(if(state==LinkState.Authorizing)"Approve on the Rokid screen" else "Authorize glasses")}
         }
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
-        if(state==LinkState.Ready){OutlinedButton(onClick=test){Text("Send HUD test")};if(BuildConfig.DEBUG){OutlinedButton(onClick=voiceTest,enabled=!voiceBusy){Text(if(voiceBusy)"Listening… speak now" else "Voice test (speak for 6 s)")};OutlinedButton(onClick=accuracySet,enabled=!voiceBusy){Text("Accuracy test: 10 phrases (about 1 min)")};if(voiceStatus.isNotEmpty())Text(voiceStatus,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodyLarge)};TextButton(onClick=link::disconnect){Text("Disconnect")}}
+        if(state==LinkState.Ready){OutlinedButton(onClick=test){Text("Send HUD test")};if(BuildConfig.DEBUG){OutlinedButton(onClick=voiceTest,enabled=!voiceBusy){Text(if(voiceBusy)"Listening… speak now" else "Voice test (speak for 6 s)")};OutlinedButton(onClick=accuracySet,enabled=!voiceBusy){Text("Accuracy test: 10 phrases (about 1 min)")}
+            OutlinedButton(onClick=replyTest,enabled=!voiceBusy){Text("Speech test: 10 replies, 3 models (about 2 min)")}
+            OutlinedButton(onClick=t3Test,enabled=!voiceBusy){Text("Speech test: 8 T3 instructions, 3 models (about 2 min)")}
+            if(voiceStatus.isNotEmpty())Text(voiceStatus,color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.bodyLarge)
+            voiceResults.forEach {Text(it,style=MaterialTheme.typography.bodyMedium,color=Color.LightGray)}};TextButton(onClick=link::disconnect){Text("Disconnect")}}
         if(BuildConfig.DEBUG){
             HorizontalDivider(color=Color(0xFF25382D))
             Text("HUD preview",style=MaterialTheme.typography.titleMedium)

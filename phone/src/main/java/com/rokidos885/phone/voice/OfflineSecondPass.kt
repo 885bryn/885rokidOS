@@ -19,21 +19,27 @@ import java.io.File
  * Both read the raw audio: they did as well or better without pre-emphasis.
  */
 class OfflineSecondPass(private val context: Context) : SecondPass {
-    override fun load(notificationId: String): Rereader? {
+    /** The two models; each is the best for one kind of speech. */
+    enum class Model { PARAKEET, WHISPER }
+
+    override fun load(notificationId: String): Rereader? = open(if (notificationId == T3_CARD_ID) Model.PARAKEET else Model.WHISPER)
+
+    /** Loads [model], or null when its files are not on the phone. Slow: call it off the main thread. */
+    fun open(model: Model): Rereader? {
         val stt = context.getExternalFilesDir("stt") ?: return null
-        val dictation = notificationId == T3_CARD_ID
+        val dictation = model == Model.PARAKEET
         val dir = File(stt, if (dictation) PARAKEET else WHISPER).apply { mkdirs() }
         val parts = if (dictation) listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt")
             else listOf("small.en-encoder.int8.onnx", "small.en-decoder.int8.onnx", "small.en-tokens.txt")
         if (!parts.all { File(dir, it).isFile }) { Log.i(TAG, "second pass off: no model in ${dir.name}"); return null }
         val p = parts.map { File(dir, it).path }
         val started = System.currentTimeMillis()
-        val model = if (dictation) OfflineModelConfig(
+        val config = if (dictation) OfflineModelConfig(
             transducer = OfflineTransducerModelConfig(encoder = p[0], decoder = p[1], joiner = p[2]),
             tokens = p[3], numThreads = 2, modelType = "nemo_transducer",
         ) else OfflineModelConfig(whisper = OfflineWhisperModelConfig(encoder = p[0], decoder = p[1]), tokens = p[2], numThreads = 4, modelType = "whisper")
         val recognizer = OfflineRecognizer(config = OfflineRecognizerConfig(
-            featConfig = FeatureConfig(sampleRate = SherpaSpeech.SAMPLE_RATE, featureDim = 80), modelConfig = model))
+            featConfig = FeatureConfig(sampleRate = SherpaSpeech.SAMPLE_RATE, featureDim = 80), modelConfig = config))
         Log.i(TAG, "second pass ${dir.name} loaded in ${System.currentTimeMillis() - started} ms")
         return object : Rereader {
             override fun read(pcm16: ByteArray): String {
