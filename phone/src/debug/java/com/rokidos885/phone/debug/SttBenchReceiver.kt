@@ -9,6 +9,7 @@ import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
+import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
 import com.rokidos885.phone.voice.ListenLimits
 import com.rokidos885.phone.voice.SherpaSpeech
 import com.rokidos885.phone.voice.SpeechAudio
@@ -24,6 +25,8 @@ import java.io.File
  * 1. The app's streaming model as T3 dictation uses it ([ListenLimits.DICTATION]: word list, beam search).
  * 2. Parakeet TDT 0.6B v3 int8, not streaming, on the raw audio: the second-pass candidate (docs/VOICE.md, 2026-11-05).
  *    Put its four files in `files/stt/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/` (adb push, as for the other model).
+ * 3. Whisper small.en int8, the same way: the best on short replies on the PC. Its three `small.en-*` int8 files go in
+ *    `files/stt/sherpa-onnx-whisper-small.en/`. A model that is missing is skipped.
  *
  * Times and memory go to logcat (tag 885rokidOSBench). The texts go only to `files/stt-bench.tsv` in the app's private folder,
  * never to logcat: they are the user's own speech. Read it with `adb exec-out run-as com.rokidos885.phone cat files/stt-bench.tsv`.
@@ -66,43 +69,47 @@ class SttBenchReceiver : BroadcastReceiver() {
             }
         }
 
-        val parakeet = File(context.getExternalFilesDir("stt"), PARAKEET).apply { mkdirs() }
-        val parts = listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt")
-        if (!parts.all { File(parakeet, it).isFile }) { log("Parakeet missing in $parakeet"); log("done"); return }
+        val stt = context.getExternalFilesDir("stt")
+        val parakeet = File(stt, PARAKEET).apply { mkdirs() }
+        offline("parakeet", parakeet, listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"), files, out) { p ->
+            OfflineModelConfig(
+                transducer = OfflineTransducerModelConfig(encoder = p[0], decoder = p[1], joiner = p[2]),
+                tokens = p[3], numThreads = 2, modelType = "nemo_transducer",
+            )
+        }
+        val whisper = File(stt, WHISPER).apply { mkdirs() }
+        offline("whisper", whisper, listOf("small.en-encoder.int8.onnx", "small.en-decoder.int8.onnx", "small.en-tokens.txt"), files, out) { p ->
+            OfflineModelConfig(whisper = OfflineWhisperModelConfig(encoder = p[0], decoder = p[1]), tokens = p[2], numThreads = 2, modelType = "whisper")
+        }
+        log("done")
+    }
+
+    /** A model that reads the whole recording ([parts] in [dir], or skipped), on the raw audio as on the PC. */
+    private fun offline(name: String, dir: File, parts: List<String>, files: List<File>, out: File, model: (List<String>) -> OfflineModelConfig) {
+        if (!parts.all { File(dir, it).isFile }) { log("$name missing in $dir"); return }
         val t0 = System.currentTimeMillis()
-        val rec = OfflineRecognizer(
-            config = OfflineRecognizerConfig(
-                featConfig = FeatureConfig(sampleRate = SherpaSpeech.SAMPLE_RATE, featureDim = 80),
-                modelConfig = OfflineModelConfig(
-                    transducer = OfflineTransducerModelConfig(
-                        encoder = File(parakeet, parts[0]).path, decoder = File(parakeet, parts[1]).path, joiner = File(parakeet, parts[2]).path,
-                    ),
-                    tokens = File(parakeet, parts[3]).path,
-                    numThreads = 2,
-                    modelType = "nemo_transducer",
-                ),
-            ),
-        )
+        val rec = OfflineRecognizer(config = OfflineRecognizerConfig(
+            featConfig = FeatureConfig(sampleRate = SherpaSpeech.SAMPLE_RATE, featureDim = 80),
+            modelConfig = model(parts.map { File(dir, it).path }),
+        ))
         try {
-            log("parakeet loaded in ${System.currentTimeMillis() - t0} ms, ${memory()}")
+            log("$name loaded in ${System.currentTimeMillis() - t0} ms, ${memory()}")
             var total = 0L
             for (f in files) {
                 val pcm = f.readBytes()
                 val t = System.currentTimeMillis()
-                // Raw audio: on the PC, Parakeet did as well or better without pre-emphasis.
                 val stream = rec.createStream()
                 stream.acceptWaveform(SpeechAudio.toFloats(pcm), SherpaSpeech.SAMPLE_RATE)
                 rec.decode(stream)
                 val text = rec.getResult(stream).text
                 stream.release()
                 val ms = System.currentTimeMillis() - t; total += ms
-                out.appendText("parakeet\t${f.parentFile?.name}/${f.name}\t${seconds(pcm)}\t$ms\t${text.trim()}\n")
+                out.appendText("$name\t${f.parentFile?.name}/${f.name}\t${seconds(pcm)}\t$ms\t${text.trim()}\n")
             }
-            log("parakeet decode total $total ms, ${memory()}")
+            log("$name decode total $total ms, ${memory()}")
         } finally {
             rec.release()
         }
-        log("done")
     }
 
     private fun seconds(pcm: ByteArray) = "%.1f".format(pcm.size / 32000.0)
@@ -116,5 +123,8 @@ class SttBenchReceiver : BroadcastReceiver() {
 
     private fun log(text: String) { Log.i("885rokidOSBench", text) }
 
-    private companion object { const val PARAKEET = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8" }
+    private companion object {
+        const val PARAKEET = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
+        const val WHISPER = "sherpa-onnx-whisper-small.en"
+    }
 }

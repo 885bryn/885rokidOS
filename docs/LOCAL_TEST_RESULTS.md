@@ -217,6 +217,19 @@ Both engines use 2 threads. The texts stay in the app's private `files/stt-bench
 - The app was not killed. Parakeet adds about 530 MB while loaded.
 - 20 T3 dictations: our model (with the word list) still has 5 of the known wrong words ("pole", "amogis", "so i saw" and
   others); Parakeet has none. Our model gave 2 empty texts, Parakeet 2.
-- 10 short replies (`phrases.txt`, 01 scored as "good to know on my way"): ours 6 of 46 words wrong, Parakeet 7. Same as the PC.
+- 10 short replies (`phrases.txt`, 01 scored as "good to know on my way", `tools/stt-bench` scoring): ours 6 of 46 words
+  wrong, Parakeet 6. Same as the PC.
 - Against the TASKS.md rule (not killed, a 12 s dictation in about 3 s or less): **passes**. Decision on building the second
   pass is with the user.
+
+Whisper small.en int8 (`small.en-*.int8.onnx`, 2 threads), added to `SttBenchReceiver` the same day, because the user finds
+words wrong in message replies too. Same recordings (a later run: 178 s of audio).
+
+| Engine | Load | Short replies wrong (of 46) | Decode of a 5 s reply (median / slowest) | 12 s dictation | Known wrong words in T3 dictations | Memory (RSS / peak) |
+|---|---|---|---|---|---|---|
+| Ours (word list) | 1.9 s | 6 | 0.54 / 0.61 s (while speaking) | 1.3 s | 5 | 370 / 390 MB |
+| Parakeet v3 | 4.6 s | 6 | 0.43 / 0.44 s | 1.1 s | 0 | 1061 MB |
+| Whisper small.en | 3.0 s | **1** | **6.8 / 10.8 s** | 6.3 s | 1 | 1047 / 1193 MB |
+
+- Whisper is the only model that is better on short replies, but each reply would wait about 7 s on the phone: Whisper
+  always decodes a 30 s window, so a short reply is not faster. Not measured: 4 threads, Whisper base.en (3 of 46 on the PC).
