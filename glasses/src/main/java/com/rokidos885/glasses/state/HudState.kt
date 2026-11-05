@@ -61,6 +61,10 @@ data class HudState(
     val t3Page: Boolean = false,
     /** Thread, model and run state from the phone, or null before the phone sent any. */
     val t3: T3Status? = null,
+    /** The reply part on screen: the one the phone reads, or the one a swipe picked. */
+    val t3Part: Int = 0,
+    /** Goes up when news from T3 must wake the display (MainActivity wakes it). */
+    val wakeSeq: Int = 0,
 
     val mode: HudMode = HudMode.Compact,
     val mapZoom: Int = 1,         // 0 = close (~300 m ahead), 1 = default (~800 m), 2 = far (~2 km)
@@ -80,7 +84,8 @@ val HudState.guiding: Boolean get() = navState in GUIDING && linkConnected && !p
 private val GUIDING = setOf(NavState.ACTIVE, NavState.REROUTING, NavState.GPS_LOST, NavState.ARRIVED)
 
 /** Something on screen that must stay on: a trip, a card, a voice step or a Grok Bot chat. The awake time starts after it. */
-val HudState.holdsDisplay: Boolean get() = guiding || notification != null || voice != null || grokBotActive
+val HudState.holdsDisplay: Boolean get() = guiding || notification != null || voice != null || grokBotActive ||
+    (t3Visible && t3?.reading == true && linkConnected)
 
 /** Home with nothing on it, awake: "ACTIVE" says the next tap starts Grok Bot. */
 val HudState.homeActive: Boolean get() = awake && linkConnected && !t3Page && !mediaVisible && notification == null && voice == null &&

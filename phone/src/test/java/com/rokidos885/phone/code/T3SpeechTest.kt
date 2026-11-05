@@ -29,4 +29,13 @@ class T3SpeechTest {
         assertTrue(spoken.length < T3Speech.MAX_CHARS + 40)
         assertTrue(spoken.endsWith("sentence. The rest is on the PC."))
     }
+
+    @Test fun partsAreWholeSentencesOfAtMost160Characters() {
+        val sentence = "This sentence has exactly forty chars.. "
+        val parts = T3Speech.parts("Short one. " + "Word ".repeat(50).trim() + ". " + sentence.repeat(6))
+        assertEquals("Short one.", parts[0].substringBefore(" Word"))
+        assertTrue(parts.all { it.length <= T3Speech.PART_CHARS })
+        assertEquals(parts.joinToString(" ").split(" ").size, ("Short one. " + "Word ".repeat(50).trim() + ". " + sentence.repeat(6)).trim().split(" ").size)
+        assertEquals(listOf("One. Two."), T3Speech.parts("One. Two."))
+    }
 }

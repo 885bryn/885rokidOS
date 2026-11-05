@@ -85,9 +85,13 @@ class RokidOs885App : Application() {
             openGrokBot = {com.rokidos885.phone.voice.GrokBot.open(this)},
             grokBotRunning = {com.rokidos885.phone.voice.GrokBot.running(this)},
             callRecordings = {com.rokidos885.phone.voice.GrokBot.callRecordings(this)},
-            onVoiceStart = {t3Voice.stop()},
+            onVoiceStart = {t3.quiet()},
         )
-        t3=com.rokidos885.phone.code.T3Mini(appScope,com.rokidos885.phone.code.T3Client(this),t3Voice::speak) {coordinator.sendT3(it)}
+        t3=com.rokidos885.phone.code.T3Mini(appScope,com.rokidos885.phone.code.T3Client(this),object:com.rokidos885.phone.code.T3Voice {
+            override fun speak(text:String)=t3Voice.speak(text)
+            override fun read(parts:List<String>,onPart:(Int)->Unit)=t3Voice.read(parts,onPart)
+            override fun stop()=t3Voice.stop()
+        }) {coordinator.sendT3(it)}
         coordinator.start()
         media.start()
         // The T3 page shows the thread and model as soon as the glasses connect.

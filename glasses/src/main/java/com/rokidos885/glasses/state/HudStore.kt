@@ -13,6 +13,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     private var wokeAt=-WAKE_GAP_MS
     /** Last touch, or last moment something held the display on ([holdsDisplay]); awake ends [awakeMillis] later. */
     private var awakeAt=clock()
+    /** A swipe picked the reply part on screen: the phone's reading no longer moves it, until the next answer. */
+    private var t3Picked=false
     val state:StateFlow<HudState> = mutable.asStateFlow()
     private var assembler=RouteAssembler()
     private var lastSeq=-1L
@@ -86,8 +88,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 else s.copy(voice=m,voiceAt=clock(),nowMs=clock(),voiceFocus=if(s.voice?.phase==m.phase)s.voiceFocus else 0)
             }
             is GrokBotState->mutable.update {it.copy(grokBotActive=m.active)}
-            // News from T3 keeps an awake HUD awake; it never wakes a sleeping one.
-            is T3Status->{if(state.value.awake)awakeAt=clock();mutable.update {it.copy(t3=m,sleepIn=0)}}
+            is T3Status->t3News(m)
             else->Unit
         }
     }
@@ -205,11 +206,33 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     /** Keys on the T3 page (see [onKey]). Dictation is a voice reply to [T3_CARD_ID]: the usual steps, REVIEW included. */
     private fun t3Key(s:HudState,key:GlassesKey) {
         if(repeated(key))return
+        // A reply in parts: swipes move through the parts (the phone's reading no longer moves the page); swipe forward
+        // from the last part goes home.
+        val last=(s.t3?.parts?.size ?: 0)-1
         when(key) {
-            GlassesKey.SWIPE_FORWARD,GlassesKey.DOUBLE_TAP,GlassesKey.BACK->mutable.update {it.copy(t3Page=false)}
+            GlassesKey.SWIPE_FORWARD->if(s.t3Part<last){t3Picked=true;mutable.update {it.copy(t3Part=it.t3Part+1)}}
+                else mutable.update {it.copy(t3Page=false)}
+            GlassesKey.SWIPE_BACK->if(s.t3Part>0){t3Picked=true;mutable.update {it.copy(t3Part=it.t3Part-1)}}
+            GlassesKey.DOUBLE_TAP,GlassesKey.BACK->mutable.update {it.copy(t3Page=false)}
             GlassesKey.TAP->if(s.linkConnected)startVoice(T3_CARD_ID)
-            GlassesKey.SWIPE_BACK->Unit
         }
+    }
+    /**
+     * News from T3 keeps an awake HUD awake. The answer to a dictation (a reply being read, T3 waiting on the PC, a
+     * failure) also takes the screen without a trip: the T3 page comes up and the display wakes (user request
+     * 2026-11-05). A voice step keeps the screen; on a trip only the phone's voice says it. The same status sent again
+     * (resync) does not.
+     */
+    private fun t3News(m:T3Status) {
+        val s=state.value
+        val prev=s.t3
+        val answer=m.said.isNotEmpty() && m.state in T3_ANSWERS && (m.state!=prev?.state || m.said!=prev?.said) && (prev!=null || m.reading)
+        val pop=answer && idle(s) && s.voice==null
+        if(answer)t3Picked=false
+        if(pop || s.awake)awakeAt=clock()
+        mutable.update {it.copy(t3=m,sleepIn=0,
+            t3Part=if(t3Picked)it.t3Part.coerceIn(0,(m.parts.size-1).coerceAtLeast(0)) else m.part,
+            t3Page=it.t3Page || pop,mediaShown=it.mediaShown && !pop,awake=it.awake || pop,wakeSeq=if(pop)it.wakeSeq+1 else it.wakeSeq)}
     }
     /** The display went to sleep (SCREEN_OFF): the touch that wakes it only wakes it. */
     fun onDisplayOff(){mutable.update {it.copy(awake=false,sleepIn=0)}}
@@ -291,6 +314,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     companion object {
         /** Phases of the Grok Bot card: waiting for the phone, or its answer. */
         private val GROK_CARD=setOf(VoicePhase.STARTING,VoicePhase.SENT,VoicePhase.FAILED)
+        /** T3 states that answer a dictation: they bring up the T3 page. */
+        private val T3_ANSWERS=setOf(T3State.REPLY,T3State.NEEDS_PC,T3State.FAILED)
         const val ALERT_STALE_MS=120_000L
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L

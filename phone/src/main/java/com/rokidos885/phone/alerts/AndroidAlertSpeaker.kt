@@ -23,6 +23,8 @@ class AndroidAlertSpeaker(context: Context, private val logText: Boolean = true)
     private val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
         .setAudioAttributes(attributes).build()
     private val pending = ArrayList<String>()
+    private val starts = HashMap<String, () -> Unit>()
+    private val dones = HashMap<String, () -> Unit>()
     private var ready = false
     private var speaking = 0
     private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
@@ -35,16 +37,21 @@ class AndroidAlertSpeaker(context: Context, private val logText: Boolean = true)
         if (tts.isLanguageAvailable(Locale.getDefault()) >= TextToSpeech.LANG_AVAILABLE) tts.language = Locale.getDefault()
         else tts.language = Locale.US
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(id: String?) {}
-            override fun onDone(id: String?) = finished()
-            @Deprecated("Required override") override fun onError(id: String?) = finished()
+            override fun onStart(id: String?) { synchronized(this@AndroidAlertSpeaker) { starts.remove(id) }?.invoke() }
+            override fun onDone(id: String?) = finished(id)
+            @Deprecated("Required override") override fun onError(id: String?) = finished(id)
         })
         synchronized(this) { ready = true; pending.forEach(::say); pending.clear() }
     }
 
-    @Synchronized private fun finished() {
-        speaking = (speaking - 1).coerceAtLeast(0)
-        if (speaking == 0) audio.abandonAudioFocusRequest(focus)
+    private fun finished(id: String?) {
+        val done = synchronized(this) {
+            starts.remove(id)
+            speaking = (speaking - 1).coerceAtLeast(0)
+            if (speaking == 0) audio.abandonAudioFocusRequest(focus)
+            dones.remove(id)
+        }
+        done?.invoke()
     }
 
     @Synchronized override fun speak(text: String) {
@@ -52,16 +59,35 @@ class AndroidAlertSpeaker(context: Context, private val logText: Boolean = true)
         say(text)
     }
 
-    private fun say(text: String) {
+    /**
+     * Says [parts] in order: [onPart] gets i as part i starts, then parts.size after the last (also when speech is not
+     * available, so the caller never waits). Stopped speech calls nothing more.
+     */
+    fun read(parts: List<String>, onPart: (Int) -> Unit) {
+        val spoken = synchronized(this) {
+            if (!ready || parts.isEmpty()) false
+            else { parts.forEachIndexed { i, p -> say(p, { onPart(i) }, if (i == parts.lastIndex) ({ onPart(parts.size) }) else null) }; true }
+        }
+        if (!spoken) onPart(parts.size)
+    }
+
+    private fun say(text: String, onStart: (() -> Unit)? = null, onDone: (() -> Unit)? = null) {
         if (speaking == 0) audio.requestAudioFocus(focus)
         speaking++
         // T3 replies are private: their speaker logs only the length.
         if (logText) Log.i(TAG, "alert_voice \"$text\"") else Log.i(TAG, "voice ${text.length} chars")
-        if (tts.speak(text, TextToSpeech.QUEUE_ADD, null, UUID.randomUUID().toString()) != TextToSpeech.SUCCESS) finished()
+        val id = UUID.randomUUID().toString()
+        onStart?.let { starts[id] = it }
+        onDone?.let { dones[id] = it }
+        if (tts.speak(text, TextToSpeech.QUEUE_ADD, null, id) != TextToSpeech.SUCCESS) { starts.remove(id)?.invoke(); finished(id) }
     }
 
-    /** Stops what is being said and what waits (a dictation is about to listen). */
-    @Synchronized fun stop() { pending.clear(); if (ready) tts.stop(); if (speaking > 0) { speaking = 0; audio.abandonAudioFocusRequest(focus) } }
+    /** Stops what is being said and what waits (a dictation is about to listen). No callback runs after this. */
+    @Synchronized fun stop() {
+        pending.clear(); starts.clear(); dones.clear()
+        if (ready) tts.stop()
+        if (speaking > 0) { speaking = 0; audio.abandonAudioFocusRequest(focus) }
+    }
 
     override fun shutdown() { tts.stop(); tts.shutdown(); audio.abandonAudioFocusRequest(focus) }
 

@@ -65,7 +65,9 @@ class MainActivity:AppCompatActivity() {
         })
         hud.setOnTouchListener { _,event -> gestures.onTouchEvent(event) }
         hud.post {vm.onDisplayReady(hud.width,hud.height)}
-        lifecycleScope.launch {repeatOnLifecycle(Lifecycle.State.STARTED){vm.store.state.collect {hud.render(it);keepScreenOn(it)}}}
+        lifecycleScope.launch {repeatOnLifecycle(Lifecycle.State.STARTED){vm.store.state.collect {hud.render(it)}}}
+        // Not tied to STARTED: the display hold and the wake for T3 news must work while the display sleeps.
+        lifecycleScope.launch {vm.store.state.collect {keepScreenOn(it)}}
         // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|t3).
         // The big message numbers make the store ignore the demo trip's own messages.
         if(BuildConfig.DEBUG)intent.getStringExtra("previewScene")?.let {scene->
@@ -122,6 +124,21 @@ class MainActivity:AppCompatActivity() {
      * the phone it closes itself after a while.
      */
     private var screenHeld=false
+    /** The user left to the Rokid menu: hold nothing and wake nothing until the HUD is opened again. */
+    private var leftHome=false
+    private var wokeFor=0
+    /**
+     * The hold is a screen wake lock without ON_AFTER_RELEASE. FLAG_KEEP_SCREEN_ON is one with it: its release restarted
+     * the system's screen timeout, so the display stayed on a full timeout after the countdown (seen 2026-11-05).
+     * VERIFY on hardware: that the display sleeps right after the countdown.
+     */
+    @Suppress("DEPRECATION")
+    private val screenLock by lazy {getSystemService(android.os.PowerManager::class.java)
+        .newWakeLock(android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK,"885rokidOS:hud").apply {setReferenceCounted(false)}}
+    /** Turns a sleeping display on (news from T3). The screen lock then keeps it on. */
+    @Suppress("DEPRECATION")
+    private fun wakeDisplay()=getSystemService(android.os.PowerManager::class.java).newWakeLock(
+        android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP,"885rokidOS:wake").acquire(1_000)
     private var idleSince=0L
     private val idleExit=Runnable {if(!isFinishing){android.util.Log.i("885rokidOSHud","idle_exit");finish()}}
     private fun keepScreenOn(s:com.rokidos885.glasses.state.HudState) {
@@ -130,10 +147,11 @@ class MainActivity:AppCompatActivity() {
         // A Grok Bot chat holds it too: the tap that ends the chat must not only wake the display.
         // Awake holds it too: "ACTIVE" and the T3 page promise that the next tap acts, so the display must not sleep
         // before the countdown ends. Released then, it sleeps at once (the system timeout has run out by then).
-        val hold=s.holdsDisplay || s.awake
+        val hold=(s.holdsDisplay || s.awake) && !leftHome
+        if(s.wakeSeq!=wokeFor){wokeFor=s.wakeSeq;if(!leftHome)wakeDisplay()}
         if(hold!=screenHeld) {
             screenHeld=hold
-            if(hold)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if(hold)screenLock.acquire() else screenLock.release()
         }
         if(demo)return
         if(live || s.linkConnected){idleSince=0L;hud.removeCallbacks(idleExit)}
@@ -145,7 +163,7 @@ class MainActivity:AppCompatActivity() {
         const val IDLE_EXIT_MS=5*60_000L
     }
     /** Back to the Rokid home screen. The task stays alive, so an active trip resumes where it was. */
-    private fun exitToHome(){if(!moveTaskToBack(true))finish()}
-    override fun onStart(){super.onStart();vm.onForeground()}
-    override fun onDestroy(){hud.removeCallbacks(idleExit);unregisterReceiver(keyReceiver);unregisterReceiver(screenOff);super.onDestroy()}
+    private fun exitToHome(){leftHome=true;keepScreenOn(vm.store.state.value);if(!moveTaskToBack(true))finish()}
+    override fun onStart(){super.onStart();leftHome=false;keepScreenOn(vm.store.state.value);vm.onForeground()}
+    override fun onDestroy(){hud.removeCallbacks(idleExit);if(screenHeld)screenLock.release();unregisterReceiver(keyReceiver);unregisterReceiver(screenOff);super.onDestroy()}
 }
