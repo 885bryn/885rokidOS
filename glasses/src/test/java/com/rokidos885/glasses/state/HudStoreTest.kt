@@ -34,14 +34,16 @@ class HudStoreTest {
         assertNull(store.state.value.detour)
     }
 
-    @Test fun tapCyclesCornerMapBigMapAndInstructionsOnlyWhenNoDetour() {
-        store.onMessage(com.rokidos885.protocol.NavStateUpdate(1,com.rokidos885.protocol.NavState.ACTIVE))
-        store.onKey(GlassesKey.TAP)
-        assertEquals(HudMode.Map, store.state.value.mode)
-        store.onKey(GlassesKey.TAP)
-        assertEquals(HudMode.Minimal, store.state.value.mode)
-        store.onKey(GlassesKey.TAP)
-        assertEquals(HudMode.Compact, store.state.value.mode)
+    @Test fun swipeForwardCyclesCornerMapBigMapAndInstructionsOnATrip() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onMessage(com.rokidos885.protocol.NavStateUpdate(1,com.rokidos885.protocol.NavState.ACTIVE))
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(HudMode.Map, hud.state.value.mode)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(HudMode.Minimal, hud.state.value.mode)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(HudMode.Compact, hud.state.value.mode)
     }
 
     @Test fun alertCountsDownClearsAndEndsWithTrip() {
@@ -177,17 +179,17 @@ class HudStoreTest {
         // The icon follows the tap at once; the view mode does not change.
         assertEquals(false,hud.state.value.media?.playing)
         assertEquals(HudMode.Compact,hud.state.value.mode)
-        // The player is right of home: swipe back goes home, it does not skip back.
+        // Swipe back skips back; the player stays.
         hud.onKey(GlassesKey.SWIPE_BACK)
-        assertEquals(false,hud.state.value.mediaVisible)
-        assertEquals(2,sent.size)
+        assertEquals(true,hud.state.value.mediaVisible)
+        assertEquals(ActionType.MEDIA_PREVIOUS,sent.last().action)
     }
 
     @Test fun mediaKeysDoNothingOnATripOrWithoutMusic() {
         val hud=HudStore {sent+=it}
         hud.onMessage(media(1));hud.onMessage(com.rokidos885.protocol.NavStateUpdate(2,com.rokidos885.protocol.NavState.ACTIVE))
-        hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD)
-        assertEquals(listOf(ActionType.CYCLE_ZOOM),sent.map {it.action})
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
         assertEquals(HudMode.Map,hud.state.value.mode)
         hud.onMessage(com.rokidos885.protocol.MediaState(3,active=false))
         assertNull(hud.state.value.media)
@@ -233,10 +235,9 @@ class HudStoreTest {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onConnection(true);hud.onMessage(media(1));hud.onMessage(t3(2))
-        // Home: swipe back opens the T3 page, already lit; a second report of the same swipe does nothing more.
+        // Home: swipe back opens the T3 page; a second report of the same swipe does nothing more.
         hud.onKey(GlassesKey.SWIPE_BACK);hud.onKey(GlassesKey.SWIPE_BACK)
         assertEquals(true,hud.state.value.t3Visible)
-        assertEquals(true,hud.state.value.t3Lit)
         assertEquals(false,hud.state.value.mediaVisible)
         // The T3 page outlasts the player's 10 s; swipe forward returns home, and the next one shows the player.
         now+=HudStore.MEDIA_SHOW_MS+1_000;hud.tick()
@@ -245,43 +246,93 @@ class HudStoreTest {
         assertEquals(false,hud.state.value.t3Page)
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(true,hud.state.value.mediaVisible)
-        // From the player, swipe back returns home; no media action is sent on the way.
+        // In the player a swipe moves through tracks; double tap goes home and does not leave the app.
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(listOf(ActionType.MEDIA_PREVIOUS,ActionType.MEDIA_NEXT),sent.map {it.action})
+        now+=HudStore.MEDIA_KEY_GAP_MS
+        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))
         assertEquals(false,hud.state.value.mediaVisible)
-        assertEquals(false,hud.state.value.t3Page)
-        assertEquals(emptyList<GlassesAction>(),sent)
-        // On a trip swipe back is still Grok Bot, not the T3 page.
-        hud.onMessage(com.rokidos885.protocol.NavStateUpdate(3,com.rokidos885.protocol.NavState.ACTIVE))
+        // Double tap on the T3 page goes home too; at home it leaves the app.
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
-        assertEquals(ActionType.OPEN_GROK_BOT,sent.single().action)
+        now+=HudStore.MEDIA_KEY_GAP_MS
+        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))
         assertEquals(false,hud.state.value.t3Page)
+        now+=HudStore.MEDIA_KEY_GAP_MS
+        assertEquals(false,hud.onKey(GlassesKey.DOUBLE_TAP))
     }
 
-    @Test fun theTapThatWakesTheT3PageOnlyLightsItAndTheNextTapSpeaks() {
+    @Test fun theTouchThatWakesTheDisplayOnlyWakesItOnEveryScreen() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onConnection(true);hud.onMessage(t3(1))
-        hud.onKey(GlassesKey.SWIPE_BACK)
-        // The display sleeps: the page stays, dark.
+        // Home, awake: ACTIVE says the next tap starts Grok Bot.
+        assertEquals(true,hud.state.value.homeActive)
+        hud.onDisplayOff()
+        assertEquals(false,hud.state.value.homeActive)
+        // The waking tap sends nothing; its second report by another input path is dropped too.
+        hud.onKey(GlassesKey.TAP);now+=100;hud.onKey(GlassesKey.TAP)
+        assertEquals(emptyList<GlassesAction>(),sent)
+        assertEquals(true,hud.state.value.homeActive)
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(ActionType.OPEN_GROK_BOT,sent.single().action)
+        sent.clear()
+        // The T3 page: the waking tap only wakes, the next tap starts dictation to T3 with the usual voice steps.
+        hud.onMessage(com.rokidos885.protocol.VoiceState(2,com.rokidos885.protocol.VoicePhase.IDLE,com.rokidos885.protocol.VOICE_COMMAND_ID))
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
         hud.onDisplayOff()
         assertEquals(true,hud.state.value.t3Page)
-        assertEquals(false,hud.state.value.t3Lit)
-        // The waking tap lights it and sends nothing (not Grok Bot, not dictation).
-        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
-        assertEquals(true,hud.state.value.t3Lit)
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.TAP)
         assertEquals(emptyList<GlassesAction>(),sent)
-        // The next tap starts dictation to T3 with the usual voice steps.
-        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(GlassesAction(0,ActionType.VOICE_START,com.rokidos885.protocol.T3_CARD_ID)),sent)
         assertEquals(com.rokidos885.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
-        // After the voice step the page is back, still lit; left alone it goes dark after T3_LIT_MS.
-        hud.onMessage(com.rokidos885.protocol.VoiceState(2,com.rokidos885.protocol.VoicePhase.SENT,com.rokidos885.protocol.T3_CARD_ID))
-        now+=HudStore.REPLY_RESULT_MS;hud.tick()
+    }
+
+    @Test fun awakeCountsDownFromFourThenTheHudLetsTheDisplaySleep() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.awakeMillis=15_000
+        hud.onConnection(true);hud.onMessage(t3(1))
+        hud.onKey(GlassesKey.SWIPE_BACK)
+        now+=10_000;hud.tick()
+        assertEquals(0,hud.state.value.sleepIn)
+        // News from T3 starts the awake time again.
+        hud.onMessage(t3(2,com.rokidos885.protocol.T3State.WORKING))
+        now+=11_000;hud.tick()
+        assertEquals(4,hud.state.value.sleepIn)
+        now+=1_000;hud.tick();assertEquals(3,hud.state.value.sleepIn)
+        now+=2_000;hud.tick();assertEquals(1,hud.state.value.sleepIn)
+        now+=1_000;hud.tick()
+        assertEquals(false,hud.state.value.awake)
+        assertEquals(0,hud.state.value.sleepIn)
+        // The page stays across sleep, at full brightness: only its footer changes ("TAP to wake").
         assertEquals(true,hud.state.value.t3Visible)
-        assertEquals(true,hud.state.value.t3Lit)
-        hud.onMessage(t3(3,com.rokidos885.protocol.T3State.WORKING))
-        now+=HudStore.T3_LIT_MS;hud.tick()
-        assertEquals(false,hud.state.value.t3Lit)
+        // A trip holds the display on, so it never counts down while guiding.
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.TAP)
+        for(seq in 3L..14L){hud.onMessage(com.rokidos885.protocol.NavStateUpdate(seq,com.rokidos885.protocol.NavState.ACTIVE));now+=5_000;hud.tick()}
+        assertEquals(true,hud.state.value.awake)
+        assertEquals(0,hud.state.value.sleepIn)
+    }
+
+    @Test fun onATripTapStartsGrokBotAndSwipeForwardStepsTheView() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true)
+        hud.onMessage(com.rokidos885.protocol.NavStateUpdate(1,com.rokidos885.protocol.NavState.ACTIVE))
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(HudMode.Map,hud.state.value.mode)
+        // Swipe back is free: no zoom, no Grok Bot, no T3 page.
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(emptyList<GlassesAction>(),sent)
+        assertEquals(false,hud.state.value.t3Page)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(ActionType.OPEN_GROK_BOT,sent.single().action)
+        // On the Grok Bot card only a tap starts or ends Grok Bot again; a swipe never does.
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(1,sent.size)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(2,sent.count {it.action==ActionType.OPEN_GROK_BOT})
     }
 
     @Test fun aVisibleNotificationRedrawsEverySecondForItsCountdown() {
@@ -361,14 +412,14 @@ class HudStoreTest {
         assertEquals(com.rokidos885.protocol.VoicePhase.SENT,hud.state.value.voice?.phase)
         now+=HudStore.REPLY_RESULT_MS;hud.tick()
         assertNull(hud.state.value.voice)
-        // On a trip a tap still changes the view, never starts Grok Bot.
+        // On a trip the map is home: a tap starts Grok Bot there too, and the view does not change.
         sent.clear();hud.onMessage(com.rokidos885.protocol.NavStateUpdate(4,com.rokidos885.protocol.NavState.ACTIVE))
         now+=1_000;hud.onKey(GlassesKey.TAP)
-        assertEquals(emptyList<ActionType>(),sent.map {it.action})
-        assertEquals(HudMode.Map,hud.state.value.mode)
+        assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
+        assertEquals(HudMode.Compact,hud.state.value.mode)
     }
 
-    @Test fun aRepeatedTapNeverStartsACommandButTheWakingTouchDoes() {
+    @Test fun aRepeatedTapNeverStartsACommand() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onConnection(true)
@@ -378,7 +429,7 @@ class HudStoreTest {
         hud.onMessage(com.rokidos885.protocol.VoiceState(cardSeq++,com.rokidos885.protocol.VoicePhase.FAILED,"n1","The app refused the reply"))
         now+=1_000;hud.onKey(GlassesKey.TAP);now+=40;hud.onKey(GlassesKey.TAP)
         assertEquals(emptyList<ActionType>(),sent.map {it.action})
-        // The touch that wakes the glasses (onStart) is a tap like any other: one tap is enough.
+        // The next real tap does.
         now+=1_000;hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
     }
@@ -432,29 +483,28 @@ class HudStoreTest {
         assertEquals(listOf(ActionType.OPEN_GROK_BOT,ActionType.VOICE_CANCEL),sent.map {it.action})
     }
 
-    @Test fun onATripSwipeBackStartsGrokBotAndSwipeForwardStepsTheZoom() {
+    @Test fun onATripEachGestureCountsOnceAndADetourKeepsTheScreen() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
         hud.onConnection(true);hud.onMessage(com.rokidos885.protocol.NavStateUpdate(1,com.rokidos885.protocol.NavState.ACTIVE))
-        // Swipe forward, reported by three input paths, steps the zoom once: default to far, then close, then default.
+        // Swipe forward, reported by three input paths, steps the view once; zoom stays with the map and the phone.
         hud.onKey(GlassesKey.SWIPE_FORWARD);now+=15;hud.onKey(GlassesKey.SWIPE_FORWARD);now+=40;hud.onKey(GlassesKey.SWIPE_FORWARD)
-        assertEquals(2,hud.state.value.mapZoom)
-        now+=1_000;hud.onKey(GlassesKey.SWIPE_FORWARD)
-        assertEquals(0,hud.state.value.mapZoom)
-        assertEquals(listOf(ActionType.CYCLE_ZOOM,ActionType.CYCLE_ZOOM),sent.map {it.action})
-        // Swipe back, reported twice, starts Grok Bot once; tap still changes the view.
-        sent.clear();now+=1_000;hud.onKey(GlassesKey.SWIPE_BACK);now+=15;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(HudMode.Map,hud.state.value.mode)
+        assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        // Tap, reported twice, starts Grok Bot once; double tap closes its card and stays in the app.
+        now+=1_000;hud.onKey(GlassesKey.TAP);now+=15;hud.onKey(GlassesKey.TAP)
         assertEquals(listOf(ActionType.OPEN_GROK_BOT),sent.map {it.action})
         assertEquals(com.rokidos885.protocol.VOICE_COMMAND_ID,sent.single().targetId)
-        assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))                 // closes the Grok Bot card, stays in the app
+        now+=1_000;assertEquals(true,hud.onKey(GlassesKey.DOUBLE_TAP))
         assertEquals(ActionType.VOICE_CANCEL,sent.last().action)
-        now+=1_000;hud.onKey(GlassesKey.TAP)
-        assertEquals(HudMode.Map,hud.state.value.mode)
-        // With no command on screen, double tap still leaves the app, and a detour offer keeps swipe back for itself.
+        // With nothing on screen, double tap leaves the app.
         now+=1_000;assertEquals(false,hud.onKey(GlassesKey.DOUBLE_TAP))
+        // A detour offer: tap takes it; swipe back does nothing.
         hud.onMessage(DetourOffer(2,"d1",300,0,"via A",expiresAtMs=Long.MAX_VALUE))
         sent.clear();now+=1_000;hud.onKey(GlassesKey.SWIPE_BACK)
         assertEquals(emptyList<ActionType>(),sent.map {it.action})
+        now+=1_000;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.ACCEPT_DETOUR),sent.map {it.action})
     }
 
     @Test fun doubleTapCancelsACommandAndStaysInTheApp() {

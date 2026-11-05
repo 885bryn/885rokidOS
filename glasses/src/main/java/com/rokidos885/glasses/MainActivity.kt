@@ -14,6 +14,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.*
 import com.rokidos885.glasses.input.*
+import com.rokidos885.glasses.state.guiding
+import com.rokidos885.glasses.state.holdsDisplay
 import com.rokidos885.glasses.ui.HudView
 import kotlinx.coroutines.launch
 
@@ -37,6 +39,9 @@ class MainActivity:AppCompatActivity() {
         // Demo only when asked for explicitly (phone "Preview on this phone", captures). Opening from the
         // Rokid home screen used to start the demo trip, which looked like a different navigation.
         vm.initialize(intent.getBooleanExtra("demo",false))
+        // Awake lasts as long as the system's own screen timeout, so the HUD lets go just when the display would sleep.
+        vm.store.awakeMillis=android.provider.Settings.System.getLong(contentResolver,android.provider.Settings.System.SCREEN_OFF_TIMEOUT,
+            com.rokidos885.glasses.state.HudStore.AWAKE_MS).coerceAtLeast(MIN_AWAKE_MS)
         if(BuildConfig.DEBUG && intent.getBooleanExtra("demo",false) && intent.getBooleanExtra("previewExpanded",false))vm.store.previewMode(com.rokidos885.glasses.state.HudMode.Map)
         hud=HudView(this)
         val container=FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
@@ -111,19 +116,21 @@ class MainActivity:AppCompatActivity() {
         return backGestureConsumed
     }
     /**
-     * Battery: hold the display on only while the phone is actually guiding (link up, not silent).
-     * With the phone connected the HUD stays open without a trip (it is the home for notifications and
-     * other features) but lets the display sleep. Without the phone it closes itself after a while.
+     * Battery: hold the display on while the phone is guiding (link up, not silent), while something else must stay
+     * on screen, and while the HUD counts itself awake (the countdown ends it). With the phone connected the HUD stays
+     * open without a trip (it is the home for notifications and other features) but lets the display sleep. Without
+     * the phone it closes itself after a while.
      */
     private var screenHeld=false
     private var idleSince=0L
     private val idleExit=Runnable {if(!isFinishing){android.util.Log.i("885rokidOSHud","idle_exit");finish()}}
     private fun keepScreenOn(s:com.rokidos885.glasses.state.HudState) {
-        val live=s.navState in HOLD_SCREEN && s.linkConnected && !s.phoneSilent
+        val live=s.guiding
         // VERIFY: whether a card wakes a display that is already asleep; this only keeps an awake one on.
         // A Grok Bot chat holds it too: the tap that ends the chat must not only wake the display.
-        // A lit T3 page too: it promises that the next tap speaks, so the display must not sleep under it.
-        val hold=live || s.notification!=null || s.voice!=null || s.grokBotActive || (s.t3Lit && s.t3Page)
+        // Awake holds it too: "ACTIVE" and the T3 page promise that the next tap acts, so the display must not sleep
+        // before the countdown ends. Released then, it sleeps at once (the system timeout has run out by then).
+        val hold=s.holdsDisplay || s.awake
         if(hold!=screenHeld) {
             screenHeld=hold
             if(hold)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -134,8 +141,7 @@ class MainActivity:AppCompatActivity() {
     }
     private val demo get()=intent.getBooleanExtra("demo",false)
     private companion object {
-        val HOLD_SCREEN=setOf(com.rokidos885.protocol.NavState.ACTIVE,com.rokidos885.protocol.NavState.REROUTING,
-            com.rokidos885.protocol.NavState.GPS_LOST,com.rokidos885.protocol.NavState.ARRIVED)
+        const val MIN_AWAKE_MS=10_000L
         const val IDLE_EXIT_MS=5*60_000L
     }
     /** Back to the Rokid home screen. The task stays alive, so an active trip resumes where it was. */

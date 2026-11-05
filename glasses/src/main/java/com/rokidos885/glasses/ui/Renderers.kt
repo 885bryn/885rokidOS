@@ -371,7 +371,9 @@ class HudRenderer(context: Context) {
         return value.take(count)+"…"
     }
 
-    fun draw(c:Canvas,nanos:Long){drawExpanded(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c)}
+    fun draw(c:Canvas,nanos:Long){drawExpanded(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c);countdown(c)}
+    /** The last seconds before the HUD lets the display sleep: 4, 3, 2, 1 in the top-right corner. */
+    private fun countdown(c:Canvas){if(s.sleepIn>0)right(c,s.sleepIn.toString(),462f,44f,34f,204,b=true)}
     private fun drawExpanded(c:Canvas,nanos:Long) {
         if(!s.linkConnected && s.navState!=NavState.IDLE && s.navState!=NavState.ENDED) {
             text(c,"Phone disconnected",18f,340f,24f)
@@ -393,6 +395,7 @@ class HudRenderer(context: Context) {
                 else if(s.notification==null && s.voice==null) {
                     if(s.mediaVisible) media(c,18f,110f)
                     else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,30f,204)
+                    else if(s.homeActive) center(c,ACTIVE,240f,199f,22f,204,b=true)
                     if(s.grokBotActive) center(c,GROK_ON,240f,380f,20f,153)
                 }
             }
@@ -408,13 +411,14 @@ class HudRenderer(context: Context) {
         }
     }
     /** Corner layout: upper 62% stays transparent; map labels are available in expanded mode. */
-    fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c)}
+    fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c);countdown(c)}
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
             if(s.t3Visible) t3(c,18f,360f)
             else if(s.notification==null && s.voice==null) {
                 if(s.mediaVisible) media(c,18f,408f)
                 else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,28f,204)
+                else if(s.homeActive) text(c,ACTIVE,18f,600f,22f,204,b=true)
                 if(s.grokBotActive) text(c,GROK_ON,18f,if(s.mediaVisible)380f else 600f,20f,153)
             }
             return
@@ -778,11 +782,11 @@ class HudRenderer(context: Context) {
         text(c,mediaArtist,left,y+40f,28f,224)
     }
     /**
-     * T3 page: thread, model, the words sent, the run state and the reply (4 lines). Dark until lit; lit, it says the next
-     * tap speaks. About 260 high.
+     * T3 page: thread, model, the words sent, the run state and the reply (4 lines; the phone reads all of it aloud).
+     * Always full brightness; the footer says what the next tap does. About 260 high.
      */
     private fun t3(c:Canvas,left:Float,top:Float) {
-        val a=if(s.t3Lit)255 else 102
+        val a=255
         text(c,"T3",left,top+20f,18f,a*179/255,b=true)
         right(c,t3State,left+T3_W,top+20f,18f,a*179/255,b=true)
         text(c,t3Thread,left,top+52f,26f,a,b=true)
@@ -790,7 +794,7 @@ class HudRenderer(context: Context) {
         var y=top+106f
         for(line in t3Said){text(c,line,left,y,20f,a*191/255);y+=26f}
         for(line in t3Text){text(c,line,left,y+4f,22f,a);y+=28f}
-        text(c,if(s.t3Lit)"READY · TAP to speak" else "TAP to wake",left,top+262f,18f,a*191/255,b=true)
+        text(c,if(s.awake)"TAP to speak" else "TAP to wake",left,top+262f,18f,a*191/255,b=true)
     }
     /** Phone notification: app, title, wrapped text. Black fill hides what is under it; a detour wins. */
     private fun notificationCard(c:Canvas) {
@@ -885,6 +889,8 @@ class HudRenderer(context: Context) {
         private const val NARROW_CARD = 300f
         /** Shown without a trip while a Grok Bot chat runs (on a trip the display stays on anyway). */
         private const val GROK_ON = "GROK BOT  ·  TAP to end"
+        /** Home, nothing on it, awake: the next tap starts Grok Bot. */
+        private const val ACTIVE = "ACTIVE  ·  TAP for Grok Bot"
         private const val VOICE_SIZE = 26f
         private const val VOICE_STEP = 32f
         private const val VOICE_ROW = 44f

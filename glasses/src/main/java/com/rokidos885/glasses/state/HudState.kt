@@ -59,9 +59,6 @@ data class HudState(
 
     /** The T3 page, left of home (swipe back from home). It stays the page across display sleep, until a swipe forward. */
     val t3Page: Boolean = false,
-    /** The T3 page is bright: the next tap starts dictation. A sleeping display darkens it, so the waking tap only lights it. */
-    val t3Lit: Boolean = false,
-    val t3LitAt: Long = 0,
     /** Thread, model and run state from the phone, or null before the phone sent any. */
     val t3: T3Status? = null,
 
@@ -71,7 +68,23 @@ data class HudState(
     /** From phone settings: redraw the map at 30 fps all the time (demos). */
     val demoMode: Boolean = false,
     val nowMs: Long = 0,
+
+    /** The display is awake and the HUD knows it: a touch acts. Asleep, the touch that wakes the display only wakes it. */
+    val awake: Boolean = true,
+    /** 4, 3, 2, 1: seconds until the HUD lets the display sleep; 0 when no countdown runs. */
+    val sleepIn: Int = 0,
 )
+
+/** The phone is guiding: the display stays on for the whole trip. */
+val HudState.guiding: Boolean get() = navState in GUIDING && linkConnected && !phoneSilent
+private val GUIDING = setOf(NavState.ACTIVE, NavState.REROUTING, NavState.GPS_LOST, NavState.ARRIVED)
+
+/** Something on screen that must stay on: a trip, a card, a voice step or a Grok Bot chat. The awake time starts after it. */
+val HudState.holdsDisplay: Boolean get() = guiding || notification != null || voice != null || grokBotActive
+
+/** Home with nothing on it, awake: "ACTIVE" says the next tap starts Grok Bot. */
+val HudState.homeActive: Boolean get() = awake && linkConnected && !t3Page && !mediaVisible && notification == null && voice == null &&
+    !grokBotActive && (navState == NavState.IDLE || navState == NavState.ENDED)
 
 val HudState.mediaVisible: Boolean get() = media != null && mediaShown
 

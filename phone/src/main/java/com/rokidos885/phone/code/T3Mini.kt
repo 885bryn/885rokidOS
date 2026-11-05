@@ -12,10 +12,12 @@ import kotlinx.coroutines.withContext
 
 /**
  * The glasses' T3 page on the phone side: one thread, picked in phone Settings. [send] hands dictated text to T3, then polls
- * the thread every [POLL_MS] until the run ends (at most [MAX_RUN_MS]) and [push]es each change. [push] runs on [scope]'s
+ * the thread every [POLL_MS] until the run ends (at most [MAX_RUN_MS]) and [push]es each change. The glasses show 4 lines,
+ * so [speak] reads the whole reply aloud (and says when T3 waits on the PC or the run failed). [push] runs on [scope]'s
  * thread; network calls run on IO. Never log the prompt or the reply.
  */
-class T3Mini(private val scope: CoroutineScope, val client: T3Client, private val push: (T3Status) -> Unit) {
+class T3Mini(private val scope: CoroutineScope, val client: T3Client, private val speak: (String) -> Unit = {},
+             private val push: (T3Status) -> Unit) {
     private var job: Job? = null
     private var thread = client.threadTitle
     private var model = ""
@@ -41,7 +43,7 @@ class T3Mini(private val scope: CoroutineScope, val client: T3Client, private va
             push(status(T3State.SENT, text))
             try {
                 val before = withContext(Dispatchers.IO) { client.readThread(id).items }
-                withContext(Dispatchers.IO) { client.send(id, text) }
+                withContext(Dispatchers.IO) { client.send(id, text + T3Speech.VOICE_NOTE) }
                 val started = System.currentTimeMillis()
                 var shown = T3State.SENT
                 var sawRun = false
@@ -52,15 +54,22 @@ class T3Mini(private val scope: CoroutineScope, val client: T3Client, private va
                     // A user message and a reply add at least two items: the run ended even if no poll saw it running.
                     if (!t.running && t.pending == 0 && (sawRun || t.items >= before + 2)) {
                         val reply = withContext(Dispatchers.IO) { client.lastReply(id, t.items) }
-                        push(if (t.status == "completed") status(T3State.REPLY, text, reply) else failed(text, "Run ${t.status}"))
+                        if (t.status == "completed") {
+                            push(status(T3State.REPLY, text, reply))
+                            speak(T3Speech.spoken(reply).ifEmpty { "T3 finished without a reply." })
+                        } else fail(text, "Run ${t.status}")
                         return@launch
                     }
                     if (t.running) sawRun = true
                     val now = if (t.pending > 0) T3State.NEEDS_PC else if (t.running) T3State.WORKING else shown
-                    if (now != shown) { shown = now; push(if (now == T3State.NEEDS_PC) status(now, text, "Answer T3 on the PC") else status(now, text)) }
+                    if (now != shown) {
+                        shown = now
+                        if (now == T3State.NEEDS_PC) { push(status(now, text, "Answer T3 on the PC")); speak("T3 needs your answer on the PC.") }
+                        else push(status(now, text))
+                    }
                 }
-                push(failed(text, "No answer after 10 min"))
-            } catch (e: CancellationException) { throw e } catch (e: Exception) { push(failed(text, reason(e))) }
+                fail(text, "No answer after 10 min")
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { fail(text, reason(e)) }
         }
         return true
     }
@@ -73,6 +82,7 @@ class T3Mini(private val scope: CoroutineScope, val client: T3Client, private va
 
     private fun status(state: T3State, said: String = "", text: String = "") = T3Status(0, thread, model, state, said, text.take(MAX_TEXT))
     private fun failed(said: String, why: String) = status(T3State.FAILED, said, why)
+    private fun fail(said: String, why: String) { push(failed(said, why)); speak("T3 failed. $why.") }
     private fun reason(e: Exception) = (e as? T3Error)?.message ?: "T3 not reachable"
 
     private companion object {

@@ -59,6 +59,8 @@ class RokidOs885App : Application() {
         media=com.rokidos885.phone.media.MediaMonitor(this)
         replies=com.rokidos885.phone.notify.NotificationReplier(this)
         policeProvider=WzSabrePoliceProvider(AndroidSabreClient(this), navEngine.position)
+        // T3 replies get their own voice: it never logs what it says, and a dictation stops it.
+        val t3Voice=com.rokidos885.phone.alerts.AndroidAlertSpeaker(this,logText=false)
         coordinator = NavSessionCoordinator(
             scope = appScope,
             link = glassesLink,
@@ -83,8 +85,9 @@ class RokidOs885App : Application() {
             openGrokBot = {com.rokidos885.phone.voice.GrokBot.open(this)},
             grokBotRunning = {com.rokidos885.phone.voice.GrokBot.running(this)},
             callRecordings = {com.rokidos885.phone.voice.GrokBot.callRecordings(this)},
+            onVoiceStart = {t3Voice.stop()},
         )
-        t3=com.rokidos885.phone.code.T3Mini(appScope,com.rokidos885.phone.code.T3Client(this)) {coordinator.sendT3(it)}
+        t3=com.rokidos885.phone.code.T3Mini(appScope,com.rokidos885.phone.code.T3Client(this),t3Voice::speak) {coordinator.sendT3(it)}
         coordinator.start()
         media.start()
         // The T3 page shows the thread and model as soon as the glasses connect.
