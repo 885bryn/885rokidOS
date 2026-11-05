@@ -65,7 +65,8 @@ class MainActivity:ComponentActivity() {
         if(permission!=android.content.pm.PackageManager.PERMISSION_GRANTED){recordAudio.launch(android.Manifest.permission.RECORD_AUDIO);return}
         voiceBusy.value=true;voiceResults.clear()
         lifecycleScope.launch {
-            try {com.rokidos885.phone.voice.VoiceSpike(applicationContext,app.glassesLink).recordAndScore(set,{voiceStatus.value=it},{line->lifecycleScope.launch {voiceResults.add(line)}})}
+            try {com.rokidos885.phone.voice.VoiceSpike(applicationContext,app.glassesLink).recordAndScore(set,{voiceStatus.value=it},{line->lifecycleScope.launch {voiceResults.add(line)}}) {title,text->
+                app.coordinator.forwardNotification("speech-test-${System.nanoTime()}","Speech test",title,text,System.currentTimeMillis())}}
             catch(e:Exception){voiceStatus.value="Test failed: ${e.javaClass.simpleName}"}
             finally {voiceBusy.value=false}
         }

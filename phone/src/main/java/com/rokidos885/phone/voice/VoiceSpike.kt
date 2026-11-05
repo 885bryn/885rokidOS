@@ -73,9 +73,9 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
 
     /**
      * Debug: records [set] like [recordAccuracySet] (the phone shows each phrase, the glasses microphone records it), then
-     * [scoreSet]. Recordings and results stay in the app's private folder; nothing goes to logcat but counts and times.
+     * [scoreSet]. [card] shows each phrase on the glasses. Recordings and results stay in the app's private folder; nothing goes to logcat but counts and times.
      */
-    suspend fun recordAndScore(set: TestSet, say: (String) -> Unit, line: (String) -> Unit) {
+    suspend fun recordAndScore(set: TestSet, say: (String) -> Unit, line: (String) -> Unit, card: (String, String) -> Unit = { _, _ -> }) {
         if (link.state.value != LinkState.Ready) { say("Glasses are not connected."); return }
         val dir = File(context.filesDir, set.dir).apply { deleteRecursively(); mkdirs() }
         File(dir, "phrases.txt").writeText(set.phrases.mapIndexed { i, p -> "%02d\t%s".format(i, p) }.joinToString("\n"))
@@ -86,6 +86,9 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
                 say(if (attempt == 1) "Get ready…  ${i + 1}/${set.phrases.size}" else "No sound from the glasses microphone. Again…  ${i + 1}/${set.phrases.size}")
                 delay(if (attempt == 1) 1_200 else 2_500)
                 say("${i + 1}/${set.phrases.size}  Say now (${set.seconds} s):  \"$phrase\"")
+                // The phrase also goes to the glasses as a card: it keeps their display on (a sleeping display sent only
+                // zeros from the microphone, 2026-11-05) and the user can read it there.
+                card("Say now  ${i + 1}/${set.phrases.size}", phrase)
                 val file = File(dir, "%02d.pcm".format(i))
                 val ok = file.outputStream().use { out ->
                     coroutineScope {
