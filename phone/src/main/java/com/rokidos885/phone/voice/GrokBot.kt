@@ -25,6 +25,7 @@ object GrokBot {
         val keyguard = context.getSystemService(KeyguardManager::class.java)
         // Only a screen that was off goes off again; a screen that was on stays on (user choice 2026-11-03).
         val screenWasOff = !context.getSystemService(PowerManager::class.java).isInteractive
+        if (screenWasOff) ScreenLockService.ensureOn(context)
         if (keyguard.isKeyguardLocked) {
             if (keyguard.isDeviceLocked) return "Unlock the phone for Grok Bot"
             context.startActivity(Intent(context, GrokBotUnlockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
