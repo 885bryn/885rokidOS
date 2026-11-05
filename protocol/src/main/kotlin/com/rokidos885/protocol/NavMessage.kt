@@ -241,7 +241,9 @@ const val T3_CARD_ID = "t3"
 
 /**
  * The T3 page: the T3 Code [thread] the phone sends to, its [model], the words last sent ([said]) and the run [state].
- * [text] is the reply (REPLY) or the reason (FAILED, NEEDS_PC). Sent on change and on resync.
+ * [text] is the reply (REPLY) or the reason (FAILED, NEEDS_PC). A REPLY also comes as [parts] (plain text, a few
+ * sentences each) that the phone reads aloud one by one: [part] is the one being read while [reading]. Sent on change
+ * and on resync.
  */
 @Serializable @SerialName("t3")
 data class T3Status(
@@ -251,6 +253,9 @@ data class T3Status(
     val state: T3State = T3State.READY,
     val said: String = "",
     val text: String = "",
+    val parts: List<String> = emptyList(),
+    val part: Int = 0,
+    val reading: Boolean = false,
 ) : NavMessage
 
 // ---------------------------------------------------------------- glasses -> phone

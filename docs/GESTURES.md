@@ -17,6 +17,7 @@ gesture counts once, even when the glasses report it two or three times (600 ms 
 **Awake and sleep.** The HUD stays awake for the system's screen timeout (at least 10 s) after the last touch, or after
 a trip, card, voice step or Grok Bot chat lets go of the display. News from T3 starts the time again. The last 4 s
 count down (4, 3, 2, 1) in the top-right corner. Then the HUD lets the display sleep. On a trip the display stays on.
+The hold is a screen wake lock that does not restart the system timeout when released, so the display sleeps at once.
 
 ## No trip
 
@@ -26,7 +27,7 @@ Home is in the middle: T3 page ← home → music player.
 |---|---|---|---|---|
 | Home, awake ("ACTIVE · TAP for Grok Bot") | Start or end Grok Bot | Show the music player (if music plays) | Show the T3 page | Leave to the Rokid menu |
 | Music player (hides after 10 s) | Play or pause | Next track | Previous track | Home |
-| T3 page | Start dictation to T3 | Home | — | Home |
+| T3 page | Start dictation to T3 | Next reply part; home from the last part (or with no reply) | Previous reply part | Home |
 | Notification card with a reply box | Start a voice reply | Close the card | Close the card | Close the card |
 | Other notification card | Close the card | Close the card | Close the card | Close the card |
 
@@ -34,9 +35,12 @@ While a notification card is up, every gesture goes to the card: one swipe close
 or skipping a track.
 
 The T3 page stays the page while the display sleeps, always at full brightness; its footer says "TAP to speak" or
-"TAP to wake". Dictation to T3 uses the voice reply steps below, CHECK included. The page shows the words sent, the run
-state and the start of the reply (4 lines). The phone reads the whole reply aloud, and says when T3 waits for an
-answer on the PC or the run failed. A new dictation or Grok Bot stops the reading. Each message to T3 ends with a
+"TAP to wake". Dictation to T3 uses the voice reply steps below, CHECK included. The page shows the words sent and the run
+state. When the answer comes (a reply, T3 waiting on the PC, or a failure), the T3 page takes the screen and the
+display wakes, unless a trip or a voice step is on. The phone reads the reply aloud in parts of a few sentences. The
+page shows the part being read in big text ("READING 2/5") and keeps the display on until the reading ends. A swipe
+picks a part; then the reading no longer moves the page. The phone also says when T3 waits for an answer on the PC
+or the run failed. A new dictation or Grok Bot stops the reading. Each message to T3 ends with a
 short note: it was dictated, and the reply is read aloud, so T3 starts with a plain 1–3 sentence summary.
 
 ## On a trip

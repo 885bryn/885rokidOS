@@ -37,6 +37,32 @@ object T3Speech {
         return (if (end > MAX_CHARS / 2) cut.take(end + 1) else cut) + " The rest is on the PC."
     }
 
+    /**
+     * Splits [spoken] text into parts of whole sentences, at most [PART_CHARS] each (a longer sentence splits at a word).
+     * The phone reads one part at a time and the glasses show the part being read, so text and voice stay together.
+     */
+    fun parts(spoken: String): List<String> {
+        val parts = ArrayList<String>()
+        var current = ""
+        fun add(piece: String) {
+            current = if (current.isEmpty()) piece else if (current.length + 1 + piece.length <= PART_CHARS) "$current $piece"
+                else { parts += current; piece }
+        }
+        for (sentence in spoken.split(SENTENCE_END).map(String::trim).filter(String::isNotEmpty)) {
+            if (sentence.length <= PART_CHARS) add(sentence)
+            else sentence.split(' ').fold("") { acc, word ->
+                if (acc.isEmpty()) word else if (acc.length + 1 + word.length <= PART_CHARS) "$acc $word" else { add(acc); word }
+            }.let { if (it.isNotEmpty()) add(it) }
+        }
+        if (current.isNotEmpty()) parts += current
+        return parts
+    }
+
+    /** About 4 lines on the glasses. */
+    const val PART_CHARS = 160
+
+    private val SENTENCE_END = Regex("(?<=[.!?])\\s+")
+
     private fun sentence(line: String) = line.trimEnd().let { if (it.isEmpty() || it.last() in ".!?:;") it else "$it." }
 
     private val CODE_BLOCK = Regex("```[\\s\\S]*?(```|$)")

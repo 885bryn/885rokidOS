@@ -315,6 +315,68 @@ class HudStoreTest {
         assertEquals(0,hud.state.value.sleepIn)
     }
 
+    private fun reply(seq:Long,part:Int=0,reading:Boolean=true)=com.rokidos885.protocol.T3Status(seq,"Fix the build","claude-opus-5-5",
+        com.rokidos885.protocol.T3State.REPLY,"Run the tests","All tests pass.",listOf("All tests pass.","I changed nothing.","Done."),part,reading)
+
+    @Test fun aT3ReplyTakesTheScreenWakesTheDisplayAndFollowsTheReading() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(media(1));hud.onMessage(t3(2))
+        // The user is on the player when the display sleeps; T3 works on the dictation.
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        hud.onMessage(t3(3,com.rokidos885.protocol.T3State.WORKING).copy(said="Run the tests"))
+        hud.onDisplayOff()
+        assertEquals(0,hud.state.value.wakeSeq)
+        // The reply: the T3 page comes up, awake, and the display is woken once.
+        hud.onMessage(reply(4))
+        assertEquals(true,hud.state.value.t3Visible)
+        assertEquals(false,hud.state.value.mediaVisible)
+        assertEquals(true,hud.state.value.awake)
+        assertEquals(1,hud.state.value.wakeSeq)
+        // The page follows the part being read, and holds the display while the phone reads.
+        hud.onMessage(reply(5,part=1))
+        assertEquals(1,hud.state.value.t3Part)
+        assertEquals(1,hud.state.value.wakeSeq)
+        assertEquals(true,hud.state.value.holdsDisplay)
+        now+=60_000;hud.tick()
+        assertEquals(true,hud.state.value.awake)
+        hud.onMessage(reply(6,part=2,reading=false))
+        assertEquals(false,hud.state.value.holdsDisplay)
+        // The same reply sent again (resync) does not wake anything.
+        hud.onMessage(reply(7,part=2,reading=false))
+        assertEquals(1,hud.state.value.wakeSeq)
+    }
+
+    @Test fun swipesMoveThroughTheReplyPartsAndTheLastOneGoesHome() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(t3(1,com.rokidos885.protocol.T3State.WORKING).copy(said="Run the tests"))
+        hud.onMessage(reply(2))
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(1,hud.state.value.t3Part)
+        // A picked part stays while the phone reads on.
+        hud.onMessage(reply(3,part=2))
+        assertEquals(1,hud.state.value.t3Part)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(0,hud.state.value.t3Part)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(true,hud.state.value.t3Page)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(false,hud.state.value.t3Page)
+        assertEquals(emptyList<GlassesAction>(),sent)
+    }
+
+    @Test fun onATripAT3ReplyDoesNotTakeTheScreen() {
+        val hud=HudStore({1_000L}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(t3(1,com.rokidos885.protocol.T3State.WORKING).copy(said="Run the tests"))
+        hud.onMessage(com.rokidos885.protocol.NavStateUpdate(2,com.rokidos885.protocol.NavState.ACTIVE))
+        hud.onMessage(reply(3))
+        assertEquals(false,hud.state.value.t3Page)
+        assertEquals(0,hud.state.value.wakeSeq)
+    }
+
     @Test fun onATripTapStartsGrokBotAndSwipeForwardStepsTheView() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}

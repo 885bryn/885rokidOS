@@ -93,6 +93,8 @@ class HudRenderer(context: Context) {
     private var t3State = ""
     private var t3Said = emptyArray<String>()
     private var t3Text = emptyArray<String>()
+    private var t3Reply = emptyArray<String>()
+    private var t3More = false
     private var notificationLeft = ""
     private var voiceHeader = ""
     private var voiceLines = emptyArray<String>()
@@ -294,7 +296,7 @@ class HudRenderer(context: Context) {
             mediaApp=m.app.uppercase()
             mediaTitle=wrap(m.title,34f,MEDIA_W-8f,2);mediaArtist=ellipsize(m.artist,26f,MEDIA_W)
         }
-        if(next.t3!==old.t3) {
+        if(next.t3!==old.t3 || next.t3Part!=old.t3Part) {
             val t=next.t3
             t3Thread=ellipsize(t?.thread?.ifEmpty {null} ?: "No thread",26f,T3_W)
             t3Model=ellipsize(t?.model.orEmpty(),17f,T3_W)
@@ -302,6 +304,11 @@ class HudRenderer(context: Context) {
                 T3State.REPLY->"REPLY"; T3State.FAILED->"FAILED"; T3State.NEEDS_PC->"NEEDS PC" }
             t3Said=wrap(t?.said.orEmpty().let {if(it.isEmpty())it else "“$it”"},20f,T3_W,2)
             t3Text=wrap(t?.text.orEmpty().replace(SPACES," "),22f,T3_W,4)
+            // A reply in parts: the part on screen, bigger and with more lines, and where it is in the reply.
+            val parts=t?.parts.orEmpty()
+            t3Reply=if(parts.isEmpty())emptyArray() else wrap(parts[next.t3Part.coerceIn(0,parts.size-1)],24f,T3_W,6)
+            if(parts.isNotEmpty())t3State=(if(t?.reading==true)"READING" else "REPLY")+if(parts.size>1)" ${next.t3Part.coerceIn(0,parts.size-1)+1}/${parts.size}" else ""
+            t3More=parts.size>1
         }
         destination=ellipsize(next.destinationName,26f,420f)
         val along=next.position?.metersAlongRoute ?: 0
@@ -786,6 +793,7 @@ class HudRenderer(context: Context) {
      * Always full brightness; the footer says what the next tap does. About 260 high.
      */
     private fun t3(c:Canvas,left:Float,top:Float) {
+        if(t3Reply.isNotEmpty()){t3Reply(c,left,top);return}
         val a=255
         text(c,"T3",left,top+20f,18f,a*179/255,b=true)
         right(c,t3State,left+T3_W,top+20f,18f,a*179/255,b=true)
@@ -795,6 +803,15 @@ class HudRenderer(context: Context) {
         for(line in t3Said){text(c,line,left,y,20f,a*191/255);y+=26f}
         for(line in t3Text){text(c,line,left,y+4f,22f,a);y+=28f}
         text(c,if(s.awake)"TAP to speak" else "TAP to wake",left,top+262f,18f,a*191/255,b=true)
+    }
+    /** A reply: thread, then the part being read (or picked) in big text; the voice reads the same words. */
+    private fun t3Reply(c:Canvas,left:Float,top:Float) {
+        text(c,"T3",left,top+20f,18f,179,b=true)
+        right(c,t3State,left+T3_W,top+20f,18f,179,b=true)
+        text(c,t3Thread,left,top+50f,22f,204,b=true)
+        var y=top+86f
+        for(line in t3Reply){text(c,line,left,y,24f);y+=30f}
+        text(c,if(!s.awake)"TAP to wake" else if(t3More)"SWIPE for more · TAP to speak" else "TAP to speak",left,top+262f,18f,191,b=true)
     }
     /** Phone notification: app, title, wrapped text. Black fill hides what is under it; a detour wins. */
     private fun notificationCard(c:Canvas) {
