@@ -38,6 +38,9 @@ class ProtocolCodecTest {
             PhoneNotification(26, "n2", "WhatsApp", "Sam", "Hi", 1700000000000, canReply = true),
             VoiceState(27, VoicePhase.REVIEW, "n2", "I will be there soon."),
             GlassesAction(28, ActionType.VOICE_SEND, "n2"),
+            T3Status(29, "Fix the build", "claude-opus-5-5", T3State.REPLY, "Run the tests", "All tests pass."),
+            T3Status(30),
+            GlassesAction(31, ActionType.VOICE_START, T3_CARD_ID),
         )
         for (m in messages) {
             val (magic, body) = ProtocolCodec.encode(m)

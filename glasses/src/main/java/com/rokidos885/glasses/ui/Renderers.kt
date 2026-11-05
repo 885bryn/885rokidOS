@@ -88,6 +88,11 @@ class HudRenderer(context: Context) {
     private var mediaTitle = emptyArray<String>()
     private var mediaArtist = ""
     private val playTriangle = Path().apply { moveTo(0f,0f); lineTo(0f,24f); lineTo(21f,12f); close() }
+    private var t3Thread = ""
+    private var t3Model = ""
+    private var t3State = ""
+    private var t3Said = emptyArray<String>()
+    private var t3Text = emptyArray<String>()
     private var notificationLeft = ""
     private var voiceHeader = ""
     private var voiceLines = emptyArray<String>()
@@ -277,7 +282,7 @@ class HudRenderer(context: Context) {
                 if(v!==old.voice || n!==old.notification || moved) {
                     val grokCard=v.notificationId==VOICE_COMMAND_ID
                     // The Grok Bot start (tap, no speech); the header fits the narrow trip card too.
-                    voiceHeader=ellipsize(if(grokCard)"GROK BOT" else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
+                    voiceHeader=ellipsize(if(grokCard)"GROK BOT" else if(v.notificationId==T3_CARD_ID)"TO T3" else "REPLY TO "+n?.title.orEmpty().uppercase(),17f,cardW-130f)
                     // The Grok card's text says what was done ("Opening Grok Bot on the phone").
                     val shown=when(v.phase) { VoicePhase.SENT->v.text.ifBlank{"Sent"}; VoicePhase.STARTING->"Starting…"
                         VoicePhase.LISTENING->v.text.ifBlank{"Speak now…"}; else->v.text }
@@ -288,6 +293,15 @@ class HudRenderer(context: Context) {
         next.media?.let { m ->
             mediaApp=m.app.uppercase()
             mediaTitle=wrap(m.title,34f,MEDIA_W-8f,2);mediaArtist=ellipsize(m.artist,26f,MEDIA_W)
+        }
+        if(next.t3!==old.t3) {
+            val t=next.t3
+            t3Thread=ellipsize(t?.thread?.ifEmpty {null} ?: "No thread",26f,T3_W)
+            t3Model=ellipsize(t?.model.orEmpty(),17f,T3_W)
+            t3State=when(t?.state) { null->"WAITING FOR PHONE"; T3State.READY->""; T3State.SENT->"SENT"; T3State.WORKING->"WORKING…"
+                T3State.REPLY->"REPLY"; T3State.FAILED->"FAILED"; T3State.NEEDS_PC->"NEEDS PC" }
+            t3Said=wrap(t?.said.orEmpty().let {if(it.isEmpty())it else "“$it”"},20f,T3_W,2)
+            t3Text=wrap(t?.text.orEmpty().replace(SPACES," "),22f,T3_W,4)
         }
         destination=ellipsize(next.destinationName,26f,420f)
         val along=next.position?.metersAlongRoute ?: 0
@@ -375,7 +389,8 @@ class HudRenderer(context: Context) {
                 // Home screen: the session now stays open without a trip, so notifications can arrive here.
                 // No trip: the screen is the player when music plays, otherwise black (transparent). A
                 // notification card replaces it. Only a lost phone link says anything.
-                if(s.notification==null && s.voice==null) {
+                if(s.t3Visible) t3(c,18f,70f)
+                else if(s.notification==null && s.voice==null) {
                     if(s.mediaVisible) media(c,18f,110f)
                     else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,30f,204)
                     if(s.grokBotActive) center(c,GROK_ON,240f,380f,20f,153)
@@ -396,7 +411,8 @@ class HudRenderer(context: Context) {
     fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c)}
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
-            if(s.notification==null && s.voice==null) {
+            if(s.t3Visible) t3(c,18f,360f)
+            else if(s.notification==null && s.voice==null) {
                 if(s.mediaVisible) media(c,18f,408f)
                 else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,28f,204)
                 if(s.grokBotActive) text(c,GROK_ON,18f,if(s.mediaVisible)380f else 600f,20f,153)
@@ -761,6 +777,21 @@ class HudRenderer(context: Context) {
         y-=40f
         text(c,mediaArtist,left,y+40f,28f,224)
     }
+    /**
+     * T3 page: thread, model, the words sent, the run state and the reply (4 lines). Dark until lit; lit, it says the next
+     * tap speaks. About 260 high.
+     */
+    private fun t3(c:Canvas,left:Float,top:Float) {
+        val a=if(s.t3Lit)255 else 102
+        text(c,"T3",left,top+20f,18f,a*179/255,b=true)
+        right(c,t3State,left+T3_W,top+20f,18f,a*179/255,b=true)
+        text(c,t3Thread,left,top+52f,26f,a,b=true)
+        text(c,t3Model,left,top+76f,17f,a*153/255)
+        var y=top+106f
+        for(line in t3Said){text(c,line,left,y,20f,a*191/255);y+=26f}
+        for(line in t3Text){text(c,line,left,y+4f,22f,a);y+=28f}
+        text(c,if(s.t3Lit)"READY · TAP to speak" else "TAP to wake",left,top+262f,18f,a*191/255,b=true)
+    }
     /** Phone notification: app, title, wrapped text. Black fill hides what is under it; a detour wins. */
     private fun notificationCard(c:Canvas) {
         if(s.notification==null || s.detour!=null) return
@@ -849,6 +880,7 @@ class HudRenderer(context: Context) {
         private const val LABEL_MINOR = 17f
         const val ALERT_FRESH_MS = 6_000L
         private const val MEDIA_W = 444f
+        private const val T3_W = 444f
         /** Cards narrower than this are the trip's corner card (222 wide). */
         private const val NARROW_CARD = 300f
         /** Shown without a trip while a Grok Bot chat runs (on a trip the display stays on anyway). */

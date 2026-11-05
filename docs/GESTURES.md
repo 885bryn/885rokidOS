@@ -1,4 +1,4 @@
-# Glasses gestures (as built, 2026-11-03)
+# Glasses gestures (as built, 2026-11-05)
 
 The 885rokidOS HUD uses the right temple touchpad. Code: `glasses/.../state/HudStore.kt` (`onKey`, `voiceKey`).
 
@@ -18,13 +18,20 @@ two or three times (600 ms guard).
 
 | Screen | Tap | Swipe forward | Swipe back | Double tap |
 |---|---|---|---|---|
-| Empty screen | Start or end Grok Bot | Show the music player (if music plays) | Show the music player (if music plays) | Leave to the Rokid menu |
-| Music player (hides after 10 s) | Play or pause | Next track | Previous track | Leave to the Rokid menu |
+| Empty screen (home) | Start or end Grok Bot | Show the music player (if music plays) | Show the T3 page | Leave to the Rokid menu |
+| Music player (hides after 10 s) | Play or pause | Next track | Back home | Leave to the Rokid menu |
+| T3 page, dark | Light it (nothing else) | Back home | — | Leave to the Rokid menu |
+| T3 page, lit ("READY · TAP to speak") | Start dictation to T3 | Back home | — | Leave to the Rokid menu |
 | Notification card with a reply box | Start a voice reply | Close the card | Close the card | Close the card |
 | Other notification card | Close the card | Close the card | Close the card | Close the card |
 
 While a notification card is up, every gesture goes to the card: one swipe closes it instead of revealing the player
 or skipping a track. The same gesture reported twice (see the 600 ms guard below) still counts once.
+
+Without a trip the screens form a carousel: T3 page ← home → music player. The T3 page stays the page while the
+display sleeps. A sleeping display darkens it, so the tap that wakes the glasses only lights it, and the next tap speaks.
+It stays lit (and the display on) for 30 s after the last tap or news from T3. Dictation to T3 uses the voice reply
+steps below, CHECK included; the page then shows the words sent, the run state and the reply (4 lines).
 
 ## On a trip
 

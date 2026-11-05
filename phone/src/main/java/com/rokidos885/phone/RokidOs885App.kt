@@ -45,6 +45,8 @@ class RokidOs885App : Application() {
         private set
     lateinit var replies:com.rokidos885.phone.notify.NotificationReplier
         private set
+    lateinit var t3:com.rokidos885.phone.code.T3Mini
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -73,7 +75,8 @@ class RokidOs885App : Application() {
             speaker = com.rokidos885.phone.alerts.AndroidAlertSpeaker(this),
             media = media,
             transcriber = com.rokidos885.phone.voice.SherpaTranscriber(this),
-            replySender = com.rokidos885.phone.voice.ReplySender {id,text->replies.reply(id,text)},
+            // The T3 page's dictation goes to T3 Code; T3Mini sends off the main thread and reports by T3Status.
+            replySender = com.rokidos885.phone.voice.ReplySender {id,text->if(id==com.rokidos885.protocol.T3_CARD_ID)t3.send(text) else replies.reply(id,text)},
             voiceWork = Dispatchers.Default,
             // Debug builds keep the last spoken reply's audio on the phone (private folder) to diagnose recognition.
             voiceAudio = if(BuildConfig.DEBUG)lastVoiceRecorder(java.io.File(filesDir,"voice-last.pcm")) else null,
@@ -81,8 +84,11 @@ class RokidOs885App : Application() {
             grokBotRunning = {com.rokidos885.phone.voice.GrokBot.running(this)},
             callRecordings = {com.rokidos885.phone.voice.GrokBot.callRecordings(this)},
         )
+        t3=com.rokidos885.phone.code.T3Mini(appScope,com.rokidos885.phone.code.T3Client(this)) {coordinator.sendT3(it)}
         coordinator.start()
         media.start()
+        // The T3 page shows the thread and model as soon as the glasses connect.
+        appScope.launch {glassesLink.state.collect {if(it==com.rokidos885.phone.glasses.LinkState.Ready)t3.refresh()}}
         appScope.launch {glassesLink.state.map(GlassesLinkService::wanted).distinctUntilChanged().collect {
             GlassesLinkService.sync(this@RokidOs885App,glassesLink.state.value)
         }}

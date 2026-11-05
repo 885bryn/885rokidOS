@@ -81,6 +81,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 else s.copy(voice=m,voiceAt=clock(),nowMs=clock(),voiceFocus=if(s.voice?.phase==m.phase)s.voiceFocus else 0)
             }
             is GrokBotState->mutable.update {it.copy(grokBotActive=m.active)}
+            // News from T3 keeps a lit page lit; it never lights a dark one.
+            is T3Status->mutable.update {it.copy(t3=m,t3LitAt=if(it.t3Lit)clock() else it.t3LitAt)}
             else->Unit
         }
     }
@@ -123,8 +125,12 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 lastMediaKey=key;lastMediaKeyAt=clock()
                 mutable.update {it.copy(notification=null)}
             }
-            // No trip and the player on screen: tap plays or pauses, swipe skips.
+            // No trip, the T3 page: swipe forward goes home; a tap lights a dark page, a tap on a lit page starts dictation.
+            idle(s) && s.t3Page && !back->t3Key(s,key)
+            // No trip and the player on screen: tap plays or pauses, swipe forward skips, swipe back goes home.
             idleMedia(s) && s.mediaShown && !back->mediaKey(key)
+            // Home, no trip: swipe back brings up the T3 page, lit (the display is awake). A swipe that closed a card is not one.
+            idle(s) && key==GlassesKey.SWIPE_BACK->if(!repeated(key))mutable.update {it.copy(t3Page=true,t3Lit=true,t3LitAt=clock(),mediaShown=false)}
             // No trip and nothing on screen: tap starts Grok Bot on the phone. The tap that closed a card or a voice
             // result, arriving again by another input path, is not one. The touch that wakes the display is: one tap works
             // whether or not the display slept, so nobody has to guess (user request 2026-11-03).
@@ -180,9 +186,21 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 mutable.update {it.copy(media=it.media?.copy(playing=!it.media.playing))}
             }
             GlassesKey.SWIPE_FORWARD->sendAction(GlassesAction(0,ActionType.MEDIA_NEXT))
-            else->sendAction(GlassesAction(0,ActionType.MEDIA_PREVIOUS))
+            // The player is right of home: swipe back returns home (user choice 2026-11-04, carousel).
+            else->mutable.update {it.copy(mediaShown=false)}
         }
     }
+    /** Keys on the T3 page (see [onKey]). Dictation is a voice reply to [T3_CARD_ID]: the usual steps, REVIEW included. */
+    private fun t3Key(s:HudState,key:GlassesKey) {
+        if(repeated(key))return
+        when {
+            key==GlassesKey.SWIPE_FORWARD->mutable.update {it.copy(t3Page=false,t3Lit=false)}
+            key==GlassesKey.TAP && s.t3Lit && s.linkConnected->startVoice(T3_CARD_ID)
+            key==GlassesKey.TAP->mutable.update {it.copy(t3Lit=true,t3LitAt=clock())}
+        }
+    }
+    /** The display went to sleep: the T3 page goes dark, so the tap that wakes the glasses only lights it. */
+    fun onDisplayOff(){mutable.update {it.copy(t3Lit=false)}}
     /** Keys during a voice reply. Everything is consumed so a swipe never skips a song or the double tap never exits. */
     private fun voiceKey(s:HudState,v:VoiceState,key:GlassesKey) {
         val id=v.notificationId
@@ -238,6 +256,9 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             notification=s.notification?.takeIf {(s.voice!=null && !resultOver(s,now)) || (s.voice==null && now-s.notificationShownAt<notificationMillis(it))},
             voice=s.voice?.takeIf {!resultOver(s,now)},
             mediaShown=s.mediaShown && now-s.mediaShownAt<MEDIA_SHOW_MS,
+            // A voice step on the page keeps it lit, so the result is still readable after it.
+            t3Lit=s.t3Lit && (s.voice!=null || now-s.t3LitAt<T3_LIT_MS),
+            t3LitAt=if(s.t3Lit && s.voice!=null)now else s.t3LitAt,
             navState=if(s.navState==NavState.ARRIVED && now-arrivedAt>=10_000)NavState.IDLE else s.navState)
             // Battery: the clock alone only matters while an alert or detour shows time-based content.
             // Otherwise an unchanged state is not re-emitted, so an idle HUD does not redraw every second.
@@ -255,6 +276,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         const val REPLY_RESULT_MS=2_000L
         /** How long the player stays after the last touch. */
         const val MEDIA_SHOW_MS=10_000L
+        /** How long the T3 page stays lit (and holds the display on) after the last tap or news. */
+        const val T3_LIT_MS=30_000L
         /** Longer than the spread between the three input paths of one gesture, shorter than two real ones. */
         const val MEDIA_KEY_GAP_MS=600L
         /** How long a card stays: longer text stays longer, but never past the maximum (driver safety). */

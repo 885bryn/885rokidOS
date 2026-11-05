@@ -23,12 +23,21 @@ words, and a short reply. Grok Bot is not used.
 
 - T3 has OAuth for outside clients: `/.well-known/oauth-authorization-server`, `authorization_code` + PKCE S256,
   `/oauth/mcp/register` (public client, `token_endpoint_auth_method: none`), `/oauth/mcp/authorize` → T3 page
-  `/connect-agent` (the user approves), `/oauth/mcp/token`. Scopes: `orchestration:read`, `orchestration:operate`.
-- The protected resource is `<origin>/mcp` (bearer header). The `t3` CLI uses this endpoint for `thread send/show`.
-- Register and authorize both answer over the LAN address too (HTTP 201, then 302 to `/connect-agent`).
-- `t3 pair --tailscale` and `t3 serve --tailscale-serve` exist (Tailscale Serve HTTPS).
-- Not verified: the token step, the token lifetime (no refresh grant is listed), the `/mcp` tool names, and sign-in
-  over Tailscale HTTPS.
+  `/connect-agent` (the user approves), `/oauth/mcp/token`.
+- The protected resource is `<origin>/mcp` (bearer header). MCP handshake uses protocol version `2025-06-18` from
+  the `initialize` result, plus the returned `mcp-session-id` on later requests.
+- Local and Tailscale HTTPS sign-in both succeeded. The Tailscale origin was
+  `https://desktop-fs967dq.taila8ef76.ts.net`; its OAuth metadata and `/mcp` used that origin.
+- The OAuth token lasted 2,592,000 seconds (30 days). T3 returned scopes
+  `orchestration:read`, `orchestration:operate`, `settings:write`, and `source-control:write` despite requesting
+  the first two scopes. The user accepts the extra scopes for now. The phone must store the token in app-private storage.
+- MCP `tools/list`, `t3_thread_list`, and `t3_thread_read` worked. A thread title and model were read. Message text
+  was not printed. The spike sent no message to an agent.
+- T3 accepted `http://127.0.0.1:43821/callback` at registration and authorization, on local and Tailscale HTTPS origins.
+- T3 rejected `rokidos885://t3/callback` at client registration (HTTP 400). The phone uses the loopback redirect
+  instead: `T3Client` listens on `127.0.0.1:43821` during sign-in (the usual native-app way, RFC 8252).
+- The running desktop server already owned the T3 data directory, so `t3 serve --tailscale-serve` could not start.
+  The user-provided Tailscale Serve proxy to the running desktop server worked. Do not run `t3 serve`.
 
 ## Build, in this order
 
@@ -37,7 +46,7 @@ in T3), exchange the code, then over `/mcp`: `tools/list`, list threads, read on
 messages). First on `127.0.0.1`, then on the Tailscale HTTPS address. Record the tool names, the token lifetime and
 the redirect URIs that T3 accepts. **Send nothing to an agent in the spike.**
 
-**Step 2 — phone: T3 client.** `phone/.../code/T3Client.kt`: sign-in (PKCE, browser + redirect back to the app),
+**Step 2 — phone: T3 client.** `phone/.../code/T3Client.kt`: sign-in (PKCE, browser + loopback redirect to the app),
 token in app-private storage, `listThreads()`, `readThread(id)`, `send(id, text)`. All network calls off the main
 thread. Never log the token, prompt or reply text. Phone Settings: "T3: sign in" and "T3 thread" (pick from
 `listThreads()`). One thread at a time; no thread switching on the glasses.
@@ -61,7 +70,7 @@ a PC relay, T3 Connect.
 Stop, write `HANDOFF.md` (3 lines: task, failing output, what was tried), and report, if any of these happens:
 - the spike cannot get a token, or `/mcp` has no tool to send to or read a thread;
 - the token lasts less than a day and cannot be renewed without the user at the PC;
-- T3 rejects a redirect the phone can receive (custom scheme or loopback);
+- T3 rejects every redirect the phone can receive (custom scheme and loopback);
 - sign-in does not work over Tailscale HTTPS;
 - any step needs a change to T3 itself;
 - the verify command fails after 2 fix attempts.

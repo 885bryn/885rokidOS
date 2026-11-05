@@ -8,6 +8,7 @@ import com.rokidos885.protocol.MediaState
 import com.rokidos885.protocol.NavState
 import com.rokidos885.protocol.PhoneNotification
 import com.rokidos885.protocol.PositionUpdate
+import com.rokidos885.protocol.T3Status
 import com.rokidos885.protocol.TrafficSegment
 import com.rokidos885.protocol.TripProgress
 import com.rokidos885.protocol.Units
@@ -56,6 +57,14 @@ data class HudState(
     val mediaShown: Boolean = false,
     val mediaShownAt: Long = 0,
 
+    /** The T3 page, left of home (swipe back from home). It stays the page across display sleep, until a swipe forward. */
+    val t3Page: Boolean = false,
+    /** The T3 page is bright: the next tap starts dictation. A sleeping display darkens it, so the waking tap only lights it. */
+    val t3Lit: Boolean = false,
+    val t3LitAt: Long = 0,
+    /** Thread, model and run state from the phone, or null before the phone sent any. */
+    val t3: T3Status? = null,
+
     val mode: HudMode = HudMode.Compact,
     val mapZoom: Int = 1,         // 0 = close (~300 m ahead), 1 = default (~800 m), 2 = far (~2 km)
     val voiceMuted: Boolean = false,
@@ -65,6 +74,9 @@ data class HudState(
 )
 
 val HudState.mediaVisible: Boolean get() = media != null && mediaShown
+
+/** The T3 page is on screen: no trip, and no card or voice step over it. */
+val HudState.t3Visible: Boolean get() = t3Page && notification == null && voice == null && (navState == NavState.IDLE || navState == NavState.ENDED)
 
 /** A tap on the card starts a voice reply: the app offers a reply box and no trip is running (trip cards stay glances). */
 val HudState.replyAvailable: Boolean get() = notification?.canReply == true && (navState == NavState.IDLE || navState == NavState.ENDED)

@@ -25,6 +25,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.rokidos885.phone.*
 import com.rokidos885.phone.glasses.LinkState
 import com.rokidos885.protocol.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun NavigationScreen(activity:ComponentActivity,app:RokidOs885App) {
@@ -153,7 +154,44 @@ fun SettingsScreen(app:RokidOs885App) {
         Text(if(installed)"WzSabre is installed. It needs no setup; keep it exempt from battery optimization." else "Install WzSabre from wzsabre.rocks for police reports.",color=Color.LightGray)
         Text(if(settings.police)policeStatus else "Police reports disabled",color=Color.LightGray)
         Text("Camera data uses WzSabre's ExCam database. Police report availability depends on the plugin and its report sources.",color=Color.LightGray)
+        T3Settings(app)
     }
+}
+
+/** T3 Code on the PC for the glasses' T3 page: address (Tailscale HTTPS), sign-in, one thread. */
+@Composable
+private fun T3Settings(app:RokidOs885App) {
+    val client=app.t3.client
+    val scope=rememberCoroutineScope()
+    var origin by remember {mutableStateOf(client.origin)}
+    var note by remember {mutableStateOf(if(client.signedIn)"Signed in" else "Not signed in")}
+    var thread by remember {mutableStateOf(client.threadTitle)}
+    var threads by remember {mutableStateOf(emptyList<Pair<String,String>>())}
+    var busy by remember {mutableStateOf(false)}
+    fun work(block:()->Unit,done:String) {
+        busy=true
+        scope.launch {
+            note=runCatching {kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO){block()};done}
+                .getOrElse {(it as? com.rokidos885.phone.code.T3Error)?.message ?: "T3 not reachable"}
+            busy=false;app.t3.refresh()
+        }
+    }
+    Text("T3 Code",style=MaterialTheme.typography.headlineMedium)
+    Text("Swipe back on the empty glasses screen for the T3 page. Tap to wake it, tap again to speak to the thread.",color=Color.LightGray)
+    OutlinedTextField(origin,{origin=it},label={Text("T3 address (Tailscale HTTPS)")},singleLine=true)
+    Button(enabled=!busy && origin.isNotBlank(),onClick={
+        client.origin=origin
+        work({client.signIn {url->app.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(url))
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))}},"Signed in")
+    }){Text("T3: sign in")}
+    Text("Approve 885rokidOS on the T3 page that opens, then come back here.",color=Color.LightGray)
+    OutlinedButton(enabled=!busy && client.signedIn,onClick={work({threads=client.listThreads()},"Pick a thread")}){
+        Text("T3 thread: ${thread.ifEmpty {"none"}} (change)")
+    }
+    threads.forEach {(id,title)->
+        TextButton(onClick={client.pickThread(id,title);thread=title;threads=emptyList();app.t3.refresh()}){Text(title.ifEmpty {id})}
+    }
+    Text(note,color=MaterialTheme.colorScheme.primary)
 }
 
 private fun phoneDistance(meters:Int,units:Units):String = if(units==Units.IMPERIAL) {

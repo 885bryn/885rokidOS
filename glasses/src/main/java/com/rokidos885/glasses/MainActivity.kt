@@ -21,6 +21,9 @@ class MainActivity:AppCompatActivity() {
     private lateinit var vm:HudViewModel
     private lateinit var hud:HudView
     private val keyReceiver=KeyReceiver { handleKey(it) }
+    private val screenOff=object:android.content.BroadcastReceiver(){
+        override fun onReceive(context:android.content.Context?,intent:android.content.Intent?){vm.store.onDisplayOff()}
+    }
     private var backGestureAt=0L
     private var backGestureConsumed=true
     override fun onCreate(savedInstanceState:Bundle?) {
@@ -42,6 +45,8 @@ class MainActivity:AppCompatActivity() {
         container.addView(hud,FrameLayout.LayoutParams(if(previewWidth>0)previewWidth else -1,if(previewHeight>0)previewHeight else -1,Gravity.CENTER))
         setContentView(container)
         ContextCompat.registerReceiver(this,keyReceiver,IntentFilter().apply {KeyType.entries.forEach { addAction(it.action) }},ContextCompat.RECEIVER_EXPORTED)
+        // VERIFY on hardware: that the glasses send SCREEN_OFF when the display sleeps.
+        ContextCompat.registerReceiver(this,screenOff,IntentFilter(android.content.Intent.ACTION_SCREEN_OFF),ContextCompat.RECEIVER_NOT_EXPORTED)
         onBackPressedDispatcher.addCallback(this){handleKey(GlassesKey.BACK)}
         val gestures=GestureDetector(this,object:GestureDetector.SimpleOnGestureListener(){
             override fun onDown(e:MotionEvent)=true
@@ -56,13 +61,17 @@ class MainActivity:AppCompatActivity() {
         hud.setOnTouchListener { _,event -> gestures.onTouchEvent(event) }
         hud.post {vm.onDisplayReady(hud.width,hud.height)}
         lifecycleScope.launch {repeatOnLifecycle(Lifecycle.State.STARTED){vm.store.state.collect {hud.render(it);keepScreenOn(it)}}}
-        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media).
+        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|t3).
         // The big message numbers make the store ignore the demo trip's own messages.
         if(BuildConfig.DEBUG)intent.getStringExtra("previewScene")?.let {scene->
             val n=1_000_000_000L
             val store=vm.store
             store.onMessage(com.rokidos885.protocol.NavStateUpdate(n,com.rokidos885.protocol.NavState.IDLE))
-            if(scene=="media") {
+            if(scene=="t3") {
+                store.onMessage(com.rokidos885.protocol.T3Status(n+1,"Fix the glasses build","claude-opus-5-5",com.rokidos885.protocol.T3State.REPLY,
+                    "Run the unit tests and tell me what fails","All 214 tests pass. The build is green, and I changed nothing."))
+                store.onKey(GlassesKey.SWIPE_BACK)
+            } else if(scene=="media") {
                 store.onMessage(com.rokidos885.protocol.MediaState(n+1,true,"Spotify","Midnight City, a very long track title that wraps","M83",true,0,0))
                 store.onKey(GlassesKey.SWIPE_FORWARD)
             } else {
@@ -113,7 +122,8 @@ class MainActivity:AppCompatActivity() {
         val live=s.navState in HOLD_SCREEN && s.linkConnected && !s.phoneSilent
         // VERIFY: whether a card wakes a display that is already asleep; this only keeps an awake one on.
         // A Grok Bot chat holds it too: the tap that ends the chat must not only wake the display.
-        val hold=live || s.notification!=null || s.voice!=null || s.grokBotActive
+        // A lit T3 page too: it promises that the next tap speaks, so the display must not sleep under it.
+        val hold=live || s.notification!=null || s.voice!=null || s.grokBotActive || (s.t3Lit && s.t3Page)
         if(hold!=screenHeld) {
             screenHeld=hold
             if(hold)window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -131,5 +141,5 @@ class MainActivity:AppCompatActivity() {
     /** Back to the Rokid home screen. The task stays alive, so an active trip resumes where it was. */
     private fun exitToHome(){if(!moveTaskToBack(true))finish()}
     override fun onStart(){super.onStart();vm.onForeground()}
-    override fun onDestroy(){hud.removeCallbacks(idleExit);unregisterReceiver(keyReceiver);super.onDestroy()}
+    override fun onDestroy(){hud.removeCallbacks(idleExit);unregisterReceiver(keyReceiver);unregisterReceiver(screenOff);super.onDestroy()}
 }

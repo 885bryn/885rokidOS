@@ -171,12 +171,16 @@ class HudStoreTest {
     @Test fun idleMediaScreenTapsPlayPauseAndSwipesSkip() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
-        hud.onMessage(media(1));hud.onKey(GlassesKey.SWIPE_BACK)
-        hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD);hud.onKey(GlassesKey.SWIPE_BACK)
-        assertEquals(listOf(ActionType.MEDIA_PLAY_PAUSE,ActionType.MEDIA_NEXT,ActionType.MEDIA_PREVIOUS),sent.map {it.action})
+        hud.onMessage(media(1));hud.onKey(GlassesKey.SWIPE_FORWARD)
+        hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(listOf(ActionType.MEDIA_PLAY_PAUSE,ActionType.MEDIA_NEXT),sent.map {it.action})
         // The icon follows the tap at once; the view mode does not change.
         assertEquals(false,hud.state.value.media?.playing)
         assertEquals(HudMode.Compact,hud.state.value.mode)
+        // The player is right of home: swipe back goes home, it does not skip back.
+        hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(false,hud.state.value.mediaVisible)
+        assertEquals(2,sent.size)
     }
 
     @Test fun mediaKeysDoNothingOnATripOrWithoutMusic() {
@@ -208,18 +212,76 @@ class HudStoreTest {
     @Test fun oneGestureReportedByThreeInputPathsSendsOneMediaAction() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
-        hud.onMessage(media(1));hud.onKey(GlassesKey.SWIPE_BACK)
+        hud.onMessage(media(1));hud.onKey(GlassesKey.SWIPE_FORWARD);now+=HudStore.MEDIA_KEY_GAP_MS
         // Broadcast, key event and touch for one swipe, within a few ms of each other.
         hud.onKey(GlassesKey.SWIPE_FORWARD);now+=15;hud.onKey(GlassesKey.SWIPE_FORWARD);now+=40;hud.onKey(GlassesKey.SWIPE_FORWARD)
         assertEquals(listOf(ActionType.MEDIA_NEXT),sent.map {it.action})
         // A second, deliberate swipe later skips again; another key is never held back by it.
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
-        hud.onKey(GlassesKey.SWIPE_BACK)
-        assertEquals(listOf(ActionType.MEDIA_NEXT,ActionType.MEDIA_NEXT,ActionType.MEDIA_PREVIOUS),sent.map {it.action})
+        hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(ActionType.MEDIA_NEXT,ActionType.MEDIA_NEXT,ActionType.MEDIA_PLAY_PAUSE),sent.map {it.action})
         // Tap is debounced the same way, so a doubled tap cannot pause and resume at once.
         now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP);hud.onKey(GlassesKey.TAP)
-        assertEquals(1,sent.count {it.action==ActionType.MEDIA_PLAY_PAUSE})
-        assertEquals(false,hud.state.value.media?.playing)
+        assertEquals(2,sent.count {it.action==ActionType.MEDIA_PLAY_PAUSE})
+        assertEquals(true,hud.state.value.media?.playing)
+    }
+
+    private fun t3(seq:Long,state:com.rokidos885.protocol.T3State=com.rokidos885.protocol.T3State.READY)=
+        com.rokidos885.protocol.T3Status(seq,"Fix the build","claude-opus-5-5",state)
+
+    @Test fun theCarouselHasTheT3PageLeftOfHomeAndThePlayerRight() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(media(1));hud.onMessage(t3(2))
+        // Home: swipe back opens the T3 page, already lit; a second report of the same swipe does nothing more.
+        hud.onKey(GlassesKey.SWIPE_BACK);hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(true,hud.state.value.t3Visible)
+        assertEquals(true,hud.state.value.t3Lit)
+        assertEquals(false,hud.state.value.mediaVisible)
+        // The T3 page outlasts the player's 10 s; swipe forward returns home, and the next one shows the player.
+        now+=HudStore.MEDIA_SHOW_MS+1_000;hud.tick()
+        assertEquals(true,hud.state.value.t3Visible)
+        hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(false,hud.state.value.t3Page)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(true,hud.state.value.mediaVisible)
+        // From the player, swipe back returns home; no media action is sent on the way.
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(false,hud.state.value.mediaVisible)
+        assertEquals(false,hud.state.value.t3Page)
+        assertEquals(emptyList<GlassesAction>(),sent)
+        // On a trip swipe back is still Grok Bot, not the T3 page.
+        hud.onMessage(com.rokidos885.protocol.NavStateUpdate(3,com.rokidos885.protocol.NavState.ACTIVE))
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(ActionType.OPEN_GROK_BOT,sent.single().action)
+        assertEquals(false,hud.state.value.t3Page)
+    }
+
+    @Test fun theTapThatWakesTheT3PageOnlyLightsItAndTheNextTapSpeaks() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(t3(1))
+        hud.onKey(GlassesKey.SWIPE_BACK)
+        // The display sleeps: the page stays, dark.
+        hud.onDisplayOff()
+        assertEquals(true,hud.state.value.t3Page)
+        assertEquals(false,hud.state.value.t3Lit)
+        // The waking tap lights it and sends nothing (not Grok Bot, not dictation).
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(true,hud.state.value.t3Lit)
+        assertEquals(emptyList<GlassesAction>(),sent)
+        // The next tap starts dictation to T3 with the usual voice steps.
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(listOf(GlassesAction(0,ActionType.VOICE_START,com.rokidos885.protocol.T3_CARD_ID)),sent)
+        assertEquals(com.rokidos885.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
+        // After the voice step the page is back, still lit; left alone it goes dark after T3_LIT_MS.
+        hud.onMessage(com.rokidos885.protocol.VoiceState(2,com.rokidos885.protocol.VoicePhase.SENT,com.rokidos885.protocol.T3_CARD_ID))
+        now+=HudStore.REPLY_RESULT_MS;hud.tick()
+        assertEquals(true,hud.state.value.t3Visible)
+        assertEquals(true,hud.state.value.t3Lit)
+        hud.onMessage(t3(3,com.rokidos885.protocol.T3State.WORKING))
+        now+=HudStore.T3_LIT_MS;hud.tick()
+        assertEquals(false,hud.state.value.t3Lit)
     }
 
     @Test fun aVisibleNotificationRedrawsEverySecondForItsCountdown() {
