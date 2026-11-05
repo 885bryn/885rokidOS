@@ -1,6 +1,7 @@
 package com.rokidos885.phone.voice
 
 import com.rokidos885.phone.glasses.GlassesLink
+import com.rokidos885.protocol.T3_CARD_ID
 import com.rokidos885.protocol.VoicePhase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -15,10 +16,27 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
+/**
+ * When listening ends by itself: after [pauseSeconds] of quiet that follow speech, or after [maxMs] in all. A tap ends it
+ * at any time.
+ */
+data class ListenLimits(val pauseSeconds: Float, val maxMs: Long) {
+    companion object {
+        /** A short reply to a message: it ends at the first real pause. */
+        val REPLY = ListenLimits(1.4f, 15_000L)
+        /**
+         * T3 dictation: people stop to think in the middle of a sentence, and 1.4 s cut them off (user report
+         * 2026-11-05; 5 s is the user's choice for now). Instructions are also longer than a message reply.
+         */
+        val DICTATION = ListenLimits(5.0f, 60_000L)
+        fun forId(notificationId: String) = if (notificationId == T3_CARD_ID) DICTATION else REPLY
+    }
+}
+
 /** Speech to text for one spoken reply. [SherpaSpeech] is the real one; tests use a fake. */
 interface Transcriber {
     /** Null when the speech model is not on the phone. Slow (loads the model): call it off the main thread. */
-    fun begin(): Transcription?
+    fun begin(limits: ListenLimits): Transcription?
 }
 
 interface Transcription : AutoCloseable {
@@ -35,7 +53,7 @@ fun interface ReplySender { fun reply(notificationId: String, text: String): Boo
 /**
  * One voice reply at a time: open the glasses microphone at once, load the speech model in parallel (audio is held until it
  * is ready, so nothing said right after the tap is lost), show the words as they come, stop when the speaker pauses (or
- * taps, or after [MAX_LISTEN_MS]), let the user confirm, then send. Every step is reported with [report], which may be
+ * taps, or after the time limit; see [ListenLimits.forId]), let the user confirm, then send. Every step is reported with [report], which may be
  * called from [work]. Nothing is sent without [send]. Message text is never logged here.
  */
 class VoiceReplyController(
@@ -84,8 +102,9 @@ class VoiceReplyController(
         // The model loads while the microphone already runs. A load that throws (no native library: UnsatisfiedLinkError, or a
         // broken model file) counts as no model: thrown here it would end this job and, with no handler, crash the app.
         var loadError = ""
+        val limits = ListenLimits.forId(id)
         val loading: Deferred<Transcription?> = async {
-            try { transcriber.begin() } catch (e: CancellationException) { throw e } catch (e: Throwable) { loadError = "Speech engine failed: ${e.javaClass.simpleName}"; null }
+            try { transcriber.begin(limits) } catch (e: CancellationException) { throw e } catch (e: Throwable) { loadError = "Speech engine failed: ${e.javaClass.simpleName}"; null }
         }
         fun noModel() = loadError.ifEmpty { "Speech model missing" }
         if (!link.startAudio()) {
@@ -100,7 +119,7 @@ class VoiceReplyController(
         val held = ArrayDeque<ByteArray>()
         val audioEnded = CompletableDeferred<Unit>()
         try {
-            withTimeoutOrNull(MAX_LISTEN_MS) {
+            withTimeoutOrNull(limits.maxMs) {
                 coroutineScope {
                     val collector = launch {
                         link.audio.collect { chunk ->
@@ -147,6 +166,4 @@ class VoiceReplyController(
 
     private class EndOfSpeech : RuntimeException()
     private class ModelMissing : RuntimeException()
-
-    companion object { const val MAX_LISTEN_MS = 15_000L }
 }

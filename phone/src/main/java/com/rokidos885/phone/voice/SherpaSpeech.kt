@@ -18,7 +18,7 @@ import java.io.File
  * second or two, so create it when a reply starts and [close] it afterwards. The model files are put in
  * [modelDir] by hand for now (docs/VOICE.md); there is no download inside the app yet.
  */
-class SherpaSpeech(modelDir: File) : AutoCloseable {
+class SherpaSpeech(modelDir: File, limits: ListenLimits = ListenLimits.REPLY) : AutoCloseable {
     private val recognizer = OnlineRecognizer(
         config = OnlineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
@@ -32,11 +32,12 @@ class SherpaSpeech(modelDir: File) : AutoCloseable {
                 numThreads = 2,
                 modelType = "nemo_transducer",
             ),
-            // Sentence end: 1.4 s of quiet after speech, 5 s of nothing at the start, or 12 s in all.
+            // Sentence end: [ListenLimits.pauseSeconds] of quiet after speech, 5 s of nothing at the start, or the time
+            // limit less 3 s in all (12 s for a reply), so the utterance ends cleanly before the controller's timeout.
             endpointConfig = EndpointConfig(
                 rule1 = EndpointRule(false, 5.0f, 0.0f),
-                rule2 = EndpointRule(true, 1.4f, 0.0f),
-                rule3 = EndpointRule(false, 0.0f, 12.0f),
+                rule2 = EndpointRule(true, limits.pauseSeconds, 0.0f),
+                rule3 = EndpointRule(false, 0.0f, limits.maxMs / 1000f - 3f),
             ),
             enableEndpoint = true,
             // Beam search gave the same words as greedy on the glasses recordings (2026-11-04) and costs more time.
