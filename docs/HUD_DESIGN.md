@@ -13,6 +13,9 @@ Congestion, Menu, TripInfo, Arrived, Media (no trip), Notification (no trip). Th
 - ~480×398 px per eye (VERIFY). Lay out with fractions of the measured view size.
 - Hardware check: the native upright Activity reports 480×640. Fit the 480×398 design uniformly,
   centered with 4% margin on each side; leave unused space black. Never stretch X and Y separately.
+- Without a trip (home, T3 page, player, cards, voice steps) the HUD draws at full size, no margin, and the pages
+  use x 8 to 472 of 480 (user request 2026-11-05). Trip screens keep the 4% margin. In the corner layout the T3
+  page takes the lower half (y 300 to 622): 8 reply lines.
 - Text: min ~22 px for anything read while driving; the distance number is the biggest thing on screen.
 - Glanceable: each region answers one question in < 1 s.
 

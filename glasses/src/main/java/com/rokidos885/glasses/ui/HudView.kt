@@ -37,7 +37,9 @@ class HudView(context: Context) : View(context) {
         // The native glasses Activity is portrait. Independent X/Y scales made text 61% taller.
         val compact=state.mode==com.rokidos885.glasses.state.HudMode.Compact || state.mode==com.rokidos885.glasses.state.HudMode.Minimal
         val designHeight=if(compact)640f else 398f
-        val scale=minOf(width/480f,height/designHeight)*.92f
+        // Trip screens keep a 4% margin; without a trip the pages use the full view (user request 2026-11-05).
+        val idle=state.navState==com.rokidos885.protocol.NavState.IDLE || state.navState==com.rokidos885.protocol.NavState.ENDED
+        val scale=minOf(width/480f,height/designHeight)*(if(idle)1f else .92f)
         canvas.save()
         canvas.translate((width-480f*scale)/2f,(height-designHeight*scale)/2f)
         canvas.scale(scale,scale)
