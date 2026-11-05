@@ -2,7 +2,7 @@ package com.rokidos885.phone.voice
 
 /**
  * Wrong words of a recognized text against the phrase that was read: substitutions, insertions and deletions, as
- * `tools/stt-bench` counts them. Case, punctuation and hyphens do not count; "I'm" = "I am", and Whisper's digits 1–10 =
+ * `tools/stt-bench` counts them. Case, punctuation and hyphens do not count; "I'm" = "I am", and Whisper's digits (1–10 and some tens) =
  * the words.
  */
 object WordErrors {
@@ -22,5 +22,6 @@ object WordErrors {
         .replace(Regex("\\bi'm\\b"), "i am").split(' ').filter { it.isNotBlank() }.map { DIGITS[it] ?: it }
 
     private val DIGITS = mapOf("1" to "one", "2" to "two", "3" to "three", "4" to "four", "5" to "five", "6" to "six",
-        "7" to "seven", "8" to "eight", "9" to "nine", "10" to "ten")
+        "7" to "seven", "8" to "eight", "9" to "nine", "10" to "ten", "15" to "fifteen", "20" to "twenty", "30" to "thirty",
+        "40" to "forty", "50" to "fifty")
 }

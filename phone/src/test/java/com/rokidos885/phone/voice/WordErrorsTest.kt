@@ -15,5 +15,7 @@ class WordErrorsTest {
     @Test fun caseDigitsAndContractionsDoNotCount() {
         assertEquals(0, WordErrors.count("I am running about ten minutes late", "I'm running about 10 minutes late."))
         assertEquals(0, WordErrors.count("start a thread", "Start a-thread!"))
+        assertEquals(0, WordErrors.count("be there in twenty minutes", "Be there in 20 minutes."))
+        assertEquals(1, WordErrors.count("be there in twenty minutes", "Be there in 2 minutes."))
     }
 }

@@ -80,22 +80,30 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
         val dir = File(context.filesDir, set.dir).apply { deleteRecursively(); mkdirs() }
         File(dir, "phrases.txt").writeText(set.phrases.mapIndexed { i, p -> "%02d\t%s".format(i, p) }.joinToString("\n"))
         for ((i, phrase) in set.phrases.withIndex()) {
-            say("Get ready…  ${i + 1}/${set.phrases.size}")
-            delay(1_200)
-            say("${i + 1}/${set.phrases.size}  Say now (${set.seconds} s):  \"$phrase\"")
-            val file = File(dir, "%02d.pcm".format(i))
-            val ok = file.outputStream().use { out ->
-                coroutineScope {
-                    val reader = launch(Dispatchers.IO) { link.audio.collect { out.write(it) } }
-                    if (!link.startAudio()) { reader.cancel(); return@coroutineScope false }
-                    delay(set.seconds * 1000L)
-                    link.stopAudio()
-                    delay(400)
-                    reader.cancel()
-                    true
+            // The glasses microphone sometimes sends only zeros (2026-11-05: 12 of 18 recordings): such a recording is
+            // useless for scoring, so the phrase is asked again, up to [SILENT_TRIES] times.
+            for (attempt in 1..SILENT_TRIES) {
+                say(if (attempt == 1) "Get ready…  ${i + 1}/${set.phrases.size}" else "No sound from the glasses microphone. Again…  ${i + 1}/${set.phrases.size}")
+                delay(if (attempt == 1) 1_200 else 2_500)
+                say("${i + 1}/${set.phrases.size}  Say now (${set.seconds} s):  \"$phrase\"")
+                val file = File(dir, "%02d.pcm".format(i))
+                val ok = file.outputStream().use { out ->
+                    coroutineScope {
+                        val reader = launch(Dispatchers.IO) { link.audio.collect { out.write(it) } }
+                        if (!link.startAudio()) { reader.cancel(); return@coroutineScope false }
+                        delay(set.seconds * 1000L)
+                        link.stopAudio()
+                        delay(400)
+                        reader.cancel()
+                        true
+                    }
                 }
+                if (!ok) { say("The glasses refused the microphone."); return }
+                val peak = loudness(file.readBytes()).first
+                Log.i(TAG, "test ${set.dir} %02d attempt $attempt peak=$peak".format(i))
+                if (peak >= SPEECH_PEAK) break
+                if (attempt == SILENT_TRIES) line("${i + 1}. No sound from the glasses microphone in $SILENT_TRIES tries.")
             }
-            if (!ok) { say("The glasses refused the microphone."); return }
         }
         scoreSet(set, say, line)
     }
@@ -196,6 +204,9 @@ class VoiceSpike(private val context: Context, private val link: GlassesLink) {
 
     companion object {
         private const val TAG = "885rokidOSVoice"
+        private const val SILENT_TRIES = 3
+        /** Below this peak a recording has no speech: the glasses send 0 or 1 when the microphone is silent. */
+        private const val SPEECH_PEAK = 200
         /** Everyday message replies, with the kinds of words our model got wrong. */
         val REPLY_SET = TestSet("reply test", "test-replies", 6, ListenLimits.REPLY, listOf(
             "hey are we still on for dinner tonight", "I'm stuck in traffic be there in twenty minutes",
