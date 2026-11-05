@@ -19,6 +19,18 @@ import java.io.File
  * [modelDir] by hand for now (docs/VOICE.md); there is no download inside the app yet.
  */
 class SherpaSpeech(modelDir: File, limits: ListenLimits = ListenLimits.REPLY) : AutoCloseable {
+    /**
+     * The hotwords file, or null for none. Written next to the model (the app owns that folder). A failed write only loses
+     * the word list: the model then decodes as it does for a reply.
+     */
+    private val hotwordsFile: File? = limits.hotwords.takeIf { it.isNotEmpty() }?.let { words ->
+        runCatching {
+            val vocab = File(modelDir, BPE_VOCAB)
+            if (!vocab.isFile) vocab.writeText(SpeechVocabulary.bpeVocab(File(modelDir, "tokens.txt").readText()))
+            File(modelDir, HOTWORDS).apply { writeText(SpeechVocabulary.hotwords(words)) }
+        }.onFailure { Log.w("885rokidOSVoice", "hotwords off: ${it.javaClass.simpleName}") }.getOrNull()
+    }
+
     private val recognizer = OnlineRecognizer(
         config = OnlineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
@@ -31,6 +43,9 @@ class SherpaSpeech(modelDir: File, limits: ListenLimits = ListenLimits.REPLY) : 
                 tokens = File(modelDir, "tokens.txt").path,
                 numThreads = 2,
                 modelType = "nemo_transducer",
+                // The tokens are BPE pieces; sherpa-onnx splits the hotwords with this vocab.
+                modelingUnit = if (hotwordsFile != null) "bpe" else "",
+                bpeVocab = if (hotwordsFile != null) File(modelDir, BPE_VOCAB).path else "",
             ),
             // Sentence end: [ListenLimits.pauseSeconds] of quiet after speech, 5 s of nothing at the start, or the time
             // limit less 3 s in all (12 s for a reply), so the utterance ends cleanly before the controller's timeout.
@@ -40,8 +55,12 @@ class SherpaSpeech(modelDir: File, limits: ListenLimits = ListenLimits.REPLY) : 
                 rule3 = EndpointRule(false, 0.0f, limits.maxMs / 1000f - 3f),
             ),
             enableEndpoint = true,
-            // Beam search gave the same words as greedy on the glasses recordings (2026-11-04) and costs more time.
-            decodingMethod = "greedy_search",
+            // Beam search alone gave the same words as greedy on the glasses recordings (2026-11-04) and costs more time,
+            // but hotwords need it: they only steer the beam (docs/VOICE.md, 2026-11-05).
+            decodingMethod = if (hotwordsFile != null) "modified_beam_search" else "greedy_search",
+            maxActivePaths = if (hotwordsFile != null) SpeechVocabulary.PATHS else 4,
+            hotwordsFile = hotwordsFile?.path ?: "",
+            hotwordsScore = SpeechVocabulary.SCORE,
         ),
     )
 
@@ -87,6 +106,8 @@ class SherpaSpeech(modelDir: File, limits: ListenLimits = ListenLimits.REPLY) : 
         const val SAMPLE_RATE = 16_000
         /** Silence after the last audio: two 1040 ms chunks. */
         const val TAIL_PAD_MS = 2_100
+        private const val BPE_VOCAB = "bpe.vocab"
+        private const val HOTWORDS = "hotwords.txt"
         /**
          * Best first. The 1040 ms model made a third fewer word errors than the 80 ms one on the glasses recordings and
          * decodes faster; it only shows words about a second later (docs/LOCAL_TEST_RESULTS.md, 2026-11-04). Same settings.

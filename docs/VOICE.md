@@ -126,3 +126,25 @@ Lost words (2026-11-05, user report: "soy sauce" often missing in T3 dictation).
 Not fixed by this: the glasses mic barely carries "s" sounds (see above), so "soy sauce" can still come out wrong. Next
 step: record the phrases that fail (debug builds keep the last one as `files/voice-last.pcm`) and score them on the PC
 against a word list (sherpa-onnx hotwords) and the larger models.
+
+Word list for T3 dictation (2026-11-05). sherpa-onnx "hotwords" favour given words. Tested on the PC with the 1040 ms model, the
+app's settings, the ten Accuracy test phrases and the last 20 voice replies from the phone (`files/voice-replies`):
+
+| Settings | Ten short replies, wrong words (of 46) | 20 real dictations |
+|---|---|---|
+| Greedy (as before) | 6 | "deep sea" / "deep seak", "amoges" |
+| Beam search, 4 paths, no list | 6 | same |
+| Beam + the exact ten phrases, boost 1.5 / 3 | 6 / 6 | — |
+| Beam + the exact ten phrases, boost 5 / 8 / 12 | 8–14 / 18–22 / 181–400: the model makes up phrases | — |
+| **Beam, 8 paths + `SpeechVocabulary.T3_WORDS`, boost 2** | **6** | **"deepseek" (2 of 2)**, no new errors |
+
+- The short replies go wrong on weak audio, not on rare words: even the exact phrase did not fix "love you too" ("let me too").
+  So message replies keep greedy decoding with no list.
+- Names gain: T3 dictation (`ListenLimits.DICTATION`) uses the list. With a boost of 3, "emojis" also came right, but
+  "stretch" became "stread".
+- Not fixed by any list: "pole latest" (pull latest), "japanese so i saw" (soy sauce), "stark a stretch" (start a new thread).
+- sherpa-onnx needs a `bpe.vocab` to split the hotwords; the NeMo model has none. `SherpaSpeech` writes one from `tokens.txt`
+  (`SpeechVocabulary.bpeVocab`) and `hotwords.txt` next to the model. No setup step. If the write fails, dictation runs without the list.
+- Cost: beam search decoded about 1.8 times slower on the PC. Not yet measured on the phone.
+- Pre-emphasis on the 1040 ms model: c = 0.7 gave 5 wrong words, 0.6 and 0.75–0.95 gave 6. One word, so 0.8 stays.
+- The list was made from the same recordings it was tested on. Re-check it on new dictations.

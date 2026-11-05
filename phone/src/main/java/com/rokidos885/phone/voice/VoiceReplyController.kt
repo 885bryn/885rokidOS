@@ -20,9 +20,9 @@ import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * When listening ends by itself: after [pauseSeconds] of quiet that follow speech, or after [maxMs] in all. A tap ends it
- * at any time.
+ * at any time. [hotwords] are words the model should favour (empty: plain greedy decoding; see [SpeechVocabulary]).
  */
-data class ListenLimits(val pauseSeconds: Float, val maxMs: Long) {
+data class ListenLimits(val pauseSeconds: Float, val maxMs: Long, val hotwords: List<String> = emptyList()) {
     companion object {
         /** A short reply to a message: it ends at the first real pause. */
         val REPLY = ListenLimits(1.4f, 15_000L)
@@ -30,7 +30,7 @@ data class ListenLimits(val pauseSeconds: Float, val maxMs: Long) {
          * T3 dictation: people stop to think in the middle of a sentence, and 1.4 s cut them off (user report
          * 2026-11-05; 5 s is the user's choice for now). Instructions are also longer than a message reply.
          */
-        val DICTATION = ListenLimits(5.0f, 60_000L)
+        val DICTATION = ListenLimits(5.0f, 60_000L, SpeechVocabulary.T3_WORDS)
         fun forId(notificationId: String) = if (notificationId == T3_CARD_ID) DICTATION else REPLY
     }
 }
