@@ -23,7 +23,7 @@ recording "hello this is the test" came back exactly.
 1. **Native libraries.** Download `sherpa-onnx-v2.0.1-android.tar.bz2` (45.3 MB) from
    `https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/`. Copy `jniLibs/arm64-v8a/libonnxruntime.so` and
    `libsherpa-onnx-jni.so` to `phone/src/main/jniLibs/arm64-v8a/` (git-ignored). The other files are not needed.
-2. **Kotlin interface.** Committed in `phone/src/main/java/com/k2fsa/sherpa/onnx/` (five files from
+2. **Kotlin interface.** Committed in `phone/src/main/java/com/k2fsa/sherpa/onnx/` (seven files from
    `sherpa-onnx/kotlin-api/` at tag v2.0.1, unchanged; the package name must stay `com.k2fsa.sherpa.onnx`
    because the native library looks classes up by that name).
 3. **Model.** Download `sherpa-onnx-nemo-streaming-fast-conformer-transducer-en-1040ms-int8.tar.bz2` from
@@ -148,3 +148,27 @@ app's settings, the ten Accuracy test phrases and the last 20 voice replies from
 - Cost: beam search decoded about 1.8 times slower on the PC. Not yet measured on the phone.
 - Pre-emphasis on the 1040 ms model: c = 0.7 gave 5 wrong words, 0.6 and 0.75–0.95 gave 6. One word, so 0.8 stays.
 - The list was made from the same recordings it was tested on. Re-check it on new dictations.
+
+## Second pass: the models OpenWhispr uses (2026-11-05, PC only)
+
+OpenWhispr is a desktop dictation app (Windows, Mac, Linux; not Android). Its local engines are Whisper and NVIDIA Parakeet
+(through sherpa-onnx, as here), so its models were scored against ours with `tools/stt-bench/compare.py`. Same PC, 2 threads.
+"Known errors" are the nine wrong words of our model in the 20 dictations: "deep sea" / "deep seak", "pole" / "poor" /
+"told" (pull), "amoges" / "amogis" (emojis), "so i saw" (soy sauce), "stark a stretch" (start a thread).
+
+| Model | Size | Ten short replies, wrong (of 46) | Known errors fixed (of 9) | New errors | Time, 20 dictations |
+|---|---|---|---|---|---|
+| **Ours, FastConformer 1040 ms** (streaming) | 131 MB | 6 | 0 | — | 4–6 s |
+| Whisper base.en | 433 MB | 3 | 6 | 2 | 7–13 s |
+| Whisper small.en, no pre-emphasis | 1.3 GB (370 MB int8) | **1** | **7** | 1 | 21–40 s |
+| Parakeet TDT 0.6B v3 int8 | 641 MB | 6 | 6 | 2–3 (no text for some 1–2 word clips) | 6 s |
+
+- Whisper and Parakeet read the whole recording after the speaker stops: no words on the glasses while speaking, no end of
+  speech. So they can only be a **second pass**: our model streams the words and finds the end, then the second model
+  decodes the whole recording again and its text goes to the check screen.
+- Candidate: **Parakeet v3 for T3 dictation only**, on the raw audio (no pre-emphasis), keeping our text when Parakeet gives
+  none or much less. It was as fast as our model on the PC. Whisper small.en was the most accurate but 3–6 times slower, and
+  Whisper can invent text on silence.
+- No model heard "pull latest" in the two 4.6 s clips ("paul", "poll"): likely the audio.
+- **Not yet measured on the phone:** load time, decode time and memory. `SttBenchReceiver` (debug builds) measures them; see
+  `docs/TASKS.md`, "Open now". Decide on the second pass only after that.

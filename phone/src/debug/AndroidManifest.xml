@@ -5,5 +5,9 @@
         <receiver
             android:name="com.rokidos885.phone.debug.VoiceReplayReceiver"
             android:exported="true" />
+        <!-- Debug builds only: times the speech engines on the saved recordings (docs/VOICE.md, "Second pass"). -->
+        <receiver
+            android:name="com.rokidos885.phone.debug.SttBenchReceiver"
+            android:exported="true" />
     </application>
 </manifest>
