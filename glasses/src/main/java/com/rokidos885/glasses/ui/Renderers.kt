@@ -264,9 +264,10 @@ class HudRenderer(context: Context) {
             val moved=layout!=cardLayout
             if(moved) {
                 cardLayout=layout
-                cardLeft=if(corner && idle)18f else if(corner)240f else 14f
+                // Without a trip the card is a page: the full width (HudView draws idle screens at full size).
+                cardLeft=if(idle)PAGE_LEFT else if(corner)240f else 14f
                 cardTop=if(corner && idle)370f else if(corner)410f else if(idle)90f else 124f
-                cardW=if(corner && !idle)222f else if(corner)444f else 452f
+                cardW=if(idle)PAGE_W else if(corner)222f else 452f
                 cardSize=if(corner && !idle)20f else 22f
                 cardStep=cardSize+6f
             }
@@ -303,10 +304,12 @@ class HudRenderer(context: Context) {
             t3State=when(t?.state) { null->"WAITING FOR PHONE"; T3State.READY->""; T3State.SENT->"SENT"; T3State.WORKING->"WORKING…"
                 T3State.REPLY->"REPLY"; T3State.FAILED->"FAILED"; T3State.NEEDS_PC->"NEEDS PC" }
             t3Said=wrap(t?.said.orEmpty().let {if(it.isEmpty())it else "“$it”"},20f,T3_W,2)
-            t3Text=wrap(t?.text.orEmpty().replace(SPACES," "),22f,T3_W,4)
+            // The corner layout gives the page the lower half of the view, so it has room for more lines.
+            val tall=next.mode!=HudMode.Map
+            t3Text=wrap(t?.text.orEmpty().replace(SPACES," "),22f,T3_W,if(tall)6 else 4)
             // A reply in parts: the part on screen, bigger and with more lines, and where it is in the reply.
             val parts=t?.parts.orEmpty()
-            t3Reply=if(parts.isEmpty())emptyArray() else wrap(parts[next.t3Part.coerceIn(0,parts.size-1)],24f,T3_W,6)
+            t3Reply=if(parts.isEmpty())emptyArray() else wrap(parts[next.t3Part.coerceIn(0,parts.size-1)],24f,T3_W,if(tall)8 else 6)
             if(parts.isNotEmpty())t3State=(if(t?.reading==true)"READING" else "REPLY")+if(parts.size>1)" ${next.t3Part.coerceIn(0,parts.size-1)+1}/${parts.size}" else ""
             t3More=parts.size>1
         }
@@ -398,9 +401,9 @@ class HudRenderer(context: Context) {
                 // Home screen: the session now stays open without a trip, so notifications can arrive here.
                 // No trip: the screen is the player when music plays, otherwise black (transparent). A
                 // notification card replaces it. Only a lost phone link says anything.
-                if(s.t3Visible) t3(c,18f,70f)
+                if(s.t3Visible) t3(c,PAGE_LEFT,70f,T3_H)
                 else if(s.notification==null && s.voice==null) {
-                    if(s.mediaVisible) media(c,18f,110f)
+                    if(s.mediaVisible) media(c,PAGE_LEFT,110f)
                     else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,30f,204)
                     else if(s.homeActive) center(c,ACTIVE,240f,199f,22f,204,b=true)
                     if(s.grokBotActive) center(c,GROK_ON,240f,380f,20f,153)
@@ -421,9 +424,9 @@ class HudRenderer(context: Context) {
     fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c);countdown(c)}
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
-            if(s.t3Visible) t3(c,18f,360f)
+            if(s.t3Visible) t3(c,PAGE_LEFT,T3_TALL_TOP,T3_TALL_H)
             else if(s.notification==null && s.voice==null) {
-                if(s.mediaVisible) media(c,18f,408f)
+                if(s.mediaVisible) media(c,PAGE_LEFT,408f)
                 else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,28f,204)
                 else if(s.homeActive) text(c,ACTIVE,18f,600f,22f,204,b=true)
                 if(s.grokBotActive) text(c,GROK_ON,18f,if(s.mediaVisible)380f else 600f,20f,153)
@@ -806,10 +809,10 @@ class HudRenderer(context: Context) {
     }
     /**
      * T3 page: thread, model, the words sent, the run state and the reply (4 lines; the phone reads all of it aloud).
-     * Always full brightness; the footer says what the next tap does. About 260 high.
+     * Always full brightness; the footer says what the next tap does, [height] below [top].
      */
-    private fun t3(c:Canvas,left:Float,top:Float) {
-        if(t3Reply.isNotEmpty()){t3Reply(c,left,top);return}
+    private fun t3(c:Canvas,left:Float,top:Float,height:Float) {
+        if(t3Reply.isNotEmpty()){t3Reply(c,left,top,height);return}
         val a=255
         text(c,"T3",left,top+20f,18f,a*179/255,b=true)
         right(c,t3State,left+T3_W,top+20f,18f,a*179/255,b=true)
@@ -818,16 +821,16 @@ class HudRenderer(context: Context) {
         var y=top+106f
         for(line in t3Said){text(c,line,left,y,20f,a*191/255);y+=26f}
         for(line in t3Text){text(c,line,left,y+4f,22f,a);y+=28f}
-        text(c,if(s.awake)"TAP to speak" else "TAP to wake",left,top+262f,18f,a*191/255,b=true)
+        text(c,if(s.awake)"TAP to speak" else "TAP to wake",left,top+height,18f,a*191/255,b=true)
     }
     /** A reply: thread, then the part being read (or picked) in big text; the voice reads the same words. */
-    private fun t3Reply(c:Canvas,left:Float,top:Float) {
+    private fun t3Reply(c:Canvas,left:Float,top:Float,height:Float) {
         text(c,"T3",left,top+20f,18f,179,b=true)
         right(c,t3State,left+T3_W,top+20f,18f,179,b=true)
         text(c,t3Thread,left,top+50f,22f,204,b=true)
         var y=top+86f
         for(line in t3Reply){text(c,line,left,y,24f);y+=30f}
-        text(c,if(!s.awake)"TAP to wake" else if(t3More)"SWIPE for more · TAP to speak" else "TAP to speak",left,top+262f,18f,191,b=true)
+        text(c,if(!s.awake)"TAP to wake" else if(t3More)"SWIPE for more · TAP to speak" else "TAP to speak",left,top+height,18f,191,b=true)
     }
     /** Phone notification: app, title, wrapped text. Black fill hides what is under it; a detour wins. */
     private fun notificationCard(c:Canvas) {
@@ -916,8 +919,15 @@ class HudRenderer(context: Context) {
         private const val LABEL_MAJOR = 18f
         private const val LABEL_MINOR = 17f
         const val ALERT_FRESH_MS = 6_000L
-        private const val MEDIA_W = 444f
-        private const val T3_W = 444f
+        /** Pages without a trip (T3, player, cards) use nearly the whole width: 8 to 472 of 480. */
+        private const val PAGE_LEFT = 8f
+        private const val PAGE_W = 464f
+        private const val MEDIA_W = PAGE_W
+        private const val T3_W = PAGE_W
+        /** T3 page heights to its footer: the expanded view (6 reply lines), and the corner view's lower half (8 lines). */
+        private const val T3_H = 262f
+        private const val T3_TALL_TOP = 300f
+        private const val T3_TALL_H = 322f
         /** Smallest map movement worth a frame, in design px. */
         const val MIN_STEP_PX = 2f
         /** A turn moves the map edge about this far from the chevron per radian, in design px. */
