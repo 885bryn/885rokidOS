@@ -2,6 +2,7 @@ package com.rokidos885.glasses.state
 
 import com.rokidos885.glasses.input.GlassesKey
 import com.rokidos885.protocol.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 
@@ -28,19 +29,24 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     private var lastMediaKey:GlassesKey?=null
     private var lastMediaKeyAt=0L
     private var arrivedAt=0L
+    /** Wakes [tickLoop] when it sleeps because nothing on screen depends on time. */
+    private val kick=Channel<Unit>(Channel.CONFLATED)
+    /** Per alert: its distance when it came, and our metersAlongRoute then. The glasses count it down themselves. */
+    private val alertBase=HashMap<String,Pair<Int,Int>>()
     private fun resultOver(s:HudState,now:Long)=s.voice!=null && (s.voice.phase==VoicePhase.SENT || s.voice.phase==VoicePhase.FAILED) && now-s.voiceAt>=REPLY_RESULT_MS
     /** A new phone session began (HelloRequest): the phone may have restarted and count from a lower number. */
     fun resetSequence(){lastSeq=-1L}
     // Without the link the phone cannot say the chat ended, so do not keep the display on for it (resync says it again).
-    fun onConnection(connected:Boolean){mutable.update {it.copy(linkConnected=connected,grokBotActive=it.grokBotActive && connected)}}
+    fun onConnection(connected:Boolean){kick.trySend(Unit);mutable.update {it.copy(linkConnected=connected,grokBotActive=it.grokBotActive && connected)}}
     fun onMessage(m:NavMessage) {
+        kick.trySend(Unit)
         lastMessageAt=clock()
         if(state.value.phoneSilent)mutable.update {it.copy(phoneSilent=false)}
         if(m !is SessionStart && m.seq<=lastSeq)return
         lastSeq=m.seq
         when(m) {
             is SessionStart->{
-                assembler=RouteAssembler();routeId=null;routePendingAt=0;dismissed.clear();alertUpdatedAt.clear();contextId="";contextParts.clear()
+                assembler=RouteAssembler();routeId=null;routePendingAt=0;dismissed.clear();alertUpdatedAt.clear();alertBase.clear();contextId="";contextParts.clear()
                 mutable.update {it.copy(units=m.units,clock24h=m.clock24h,destinationName=m.destinationName,
                     route=emptyList(),routeTotalMeters=0,traffic=emptyList(),contextRoads=emptyList(),
                     position=null,previousPosition=null,maneuver=null,progress=null,alerts=emptyList(),alertSeenAt=emptyMap(),detour=null,navState=NavState.ROUTING)}
@@ -51,7 +57,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 mutable.update {it.copy(route=PolylineCodec.decode(line),routeTotalMeters=m.totalMeters,
                     contextRoads=if(changed)emptyList() else it.contextRoads,traffic=if(changed)emptyList() else it.traffic)}
             }}
-            is PositionUpdate->mutable.update {it.copy(previousPosition=it.position,position=m)}
+            is PositionUpdate->mutable.update {it.copy(previousPosition=it.position,position=m,alerts=liveAlerts(it.alerts,m.metersAlongRoute))}
             is ManeuverUpdate->mutable.update {it.copy(maneuver=m)}
             is TripProgress->mutable.update {it.copy(progress=m)}
             is TrafficSegments->if(m.routeId==routeId)mutable.update {it.copy(traffic=m.segments)}
@@ -60,11 +66,12 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             // passed, and tick() drops any the phone stops updating.
             is Alert->if(m.id !in dismissed){
                 alertUpdatedAt[m.id]=clock()
+                alertBase[m.id]=m.distanceAheadMeters to (state.value.position?.metersAlongRoute ?: -1)
                 mutable.update {s->s.copy(
                     alerts=(s.alerts.filterNot {it.id==m.id}+m).sortedBy {it.distanceAheadMeters},
                     alertSeenAt=if(m.id in s.alertSeenAt)s.alertSeenAt else s.alertSeenAt+(m.id to clock()))}
             }
-            is AlertCleared->{dismissed.remove(m.id);alertUpdatedAt.remove(m.id);mutable.update {s->s.copy(
+            is AlertCleared->{dismissed.remove(m.id);alertUpdatedAt.remove(m.id);alertBase.remove(m.id);mutable.update {s->s.copy(
                 alerts=s.alerts.filterNot {it.id==m.id},alertSeenAt=s.alertSeenAt-m.id)}}
             is DetourOffer->mutable.update {it.copy(detour=m)}
             is DetourResolved->mutable.update {if(it.detour?.offerId==m.offerId)it.copy(detour=null) else it}
@@ -72,7 +79,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 if(m.state==NavState.ARRIVED)arrivedAt=clock()
                 if(m.state==NavState.IDLE || m.state==NavState.ENDED)dismissed.clear()
                 val tripOver=m.state in listOf(NavState.IDLE,NavState.ENDED,NavState.ARRIVED)
-                if(tripOver)alertUpdatedAt.clear()
+                if(tripOver){alertUpdatedAt.clear();alertBase.clear()}
                 mutable.update {it.copy(navState=m.state,alerts=if(tripOver)emptyList() else it.alerts,
                     alertSeenAt=if(tripOver)emptyMap() else it.alertSeenAt)}
             }
@@ -112,6 +119,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
      * and swipe never change it unseen. Rules: tap acts, a swipe moves (page, row, track), double tap goes back.
      */
     fun onKey(key:GlassesKey):Boolean {
+        kick.trySend(Unit)
         val now=clock()
         // The touch that wakes the display only wakes it, on every screen (user request 2026-11-05). The rest of the
         // same gesture, by the other input paths, is dropped with it.
@@ -279,9 +287,9 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     fun previewMode(value:HudMode)=mode(value)
     fun tick(now:Long=clock()) {
         if(routePendingAt>0 && now-routePendingAt>=5000){routePendingAt=0;requestResync()}
-        // The phone refreshes active alerts with every position fix; a silent one is stale (link drop).
+        // The phone refreshes active alerts at least every 30 s; one silent for ALERT_STALE_MS is stale (link drop).
         val stale=alertUpdatedAt.filterValues {now-it>=ALERT_STALE_MS}.keys
-        stale.forEach(alertUpdatedAt::remove)
+        stale.forEach {alertUpdatedAt.remove(it);alertBase.remove(it)}
         val silent=lastMessageAt>0 && now-lastMessageAt>=PHONE_SILENT_MS
         mutable.update {s->val n=s.copy(nowMs=now,detour=s.detour?.takeIf {it.expiresAtMs>now},
             phoneSilent=silent && s.navState in listOf(NavState.ACTIVE,NavState.REROUTING,NavState.GPS_LOST),
@@ -310,13 +318,36 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         return if(left<=0)s.copy(awake=false,sleepIn=0)
         else s.copy(sleepIn=if(left<=COUNTDOWN_MS)((left+999)/1000).toInt() else 0)
     }
-    suspend fun tickLoop(){while(true){tick();delay(1000)}}
+    /**
+     * The phone sends an alert when it appears, moves or every 30 s (AlertTracker on the phone), not
+     * on each fix: between those, each fix counts the distance down by the metres travelled along the route. A fix
+     * that goes back (a new route) leaves the distance as it is until the phone sends it again.
+     */
+    private fun liveAlerts(alerts:List<Alert>,along:Int):List<Alert> {
+        if(along<0 || alerts.isEmpty())return alerts
+        val live=alerts.map {a->
+            val (distance,from)=alertBase[a.id] ?: return@map a
+            val travelled=along-from
+            if(from<0 || travelled<-ALERT_BACK_M)a else a.copy(distanceAheadMeters=(distance-travelled).coerceAtLeast(0))
+        }
+        return if(live==alerts)alerts else live.sortedBy {it.distanceAheadMeters}
+    }
+    /**
+     * Battery: the loop ticks each second only while something depends on time: an awake display (countdown), a trip
+     * (phone-silent check), alerts, a detour offer, a card, a voice step, the player, a pending route. Otherwise it
+     * sleeps until a message, a key or a link change, so an idle HUD with the display off does not wake the CPU.
+     */
+    suspend fun tickLoop(){while(true){tick();if(needsTick())delay(1000) else kick.receive()}}
+    internal fun needsTick(s:HudState=state.value)=s.awake || routePendingAt>0 || alertUpdatedAt.isNotEmpty() || s.alerts.isNotEmpty() ||
+        s.detour!=null || s.notification!=null || s.voice!=null || s.mediaShown || s.navState !in listOf(NavState.IDLE,NavState.ENDED)
     companion object {
         /** Phases of the Grok Bot card: waiting for the phone, or its answer. */
         private val GROK_CARD=setOf(VoicePhase.STARTING,VoicePhase.SENT,VoicePhase.FAILED)
         /** T3 states that answer a dictation: they bring up the T3 page. */
         private val T3_ANSWERS=setOf(T3State.REPLY,T3State.NEEDS_PC,T3State.FAILED)
         const val ALERT_STALE_MS=120_000L
+        /** A fix this far behind the one an alert came with is on another route: the alert distance waits for the phone. */
+        const val ALERT_BACK_M=50
         /** The phone sends position at least every 5 s while guiding, even when stopped. */
         const val PHONE_SILENT_MS=12_000L
         /** How long "Sent" or the failure reason stays before the card closes. */

@@ -17,6 +17,10 @@ Units: meters, seconds, epoch-ms, degrees (0 = north, clockwise). Formatting hap
 Active alerts are re-sent at least every 30 s even when unchanged; the HUD drops an alert it has not
 heard about for 2 min. `alert_clear` is still the normal way an alert ends.
 
+Between those sends, the HUD counts `distanceAheadMeters` down itself: it subtracts the metres travelled along the
+route (`position.metersAlongRoute`) since the alert came. The phone sends an alert again only when it is new, when a
+field other than the distance changes, when the HUD's count is off by 15 m or more (the report moved), or after 30 s.
+
 `alert.reportedAtMs` is optional (default `0`, unknown), epoch milliseconds, for the mockup's report-age
 label. Old senders remain valid; camera database entries use `0` and never invent a report age.
 WzSabre uses the `alert` / `alert_clear` wire messages. `source`

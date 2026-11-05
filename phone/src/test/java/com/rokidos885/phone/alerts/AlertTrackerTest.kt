@@ -16,14 +16,28 @@ class AlertTrackerTest {
         val first = tracker.update(listOf(incident), position(0.0), 2000) { ++seq }.single() as Alert
         assertEquals(1112, first.distanceAheadMeters)
         assertEquals("WzSabre", first.source)
-        val next = tracker.update(listOf(incident), position(0.005), 2000) { ++seq }.single() as Alert
-        assertEquals(556, next.distanceAheadMeters)
+        // Closer: the glasses count it down from their own fix, so nothing is sent; the voice still sees it.
+        assertTrue(tracker.update(listOf(incident), position(0.005), 2000) { ++seq }.isEmpty())
+        assertEquals(556, tracker.current.single().distanceAheadMeters)
         assertTrue(tracker.update(listOf(incident), position(0.005), 2000) { ++seq }.isEmpty())
         // 55 m past the pin: pins are approximate, so it stays, at 0.
-        assertEquals(0, (tracker.update(listOf(incident), position(0.0105), 2000) { ++seq }.single() as Alert).distanceAheadMeters)
+        assertTrue(tracker.update(listOf(incident), position(0.0105), 2000) { ++seq }.isEmpty())
+        assertEquals(0, tracker.current.single().distanceAheadMeters)
         // 111 m past: cleared, and not replayed.
         assertEquals("p1", (tracker.update(listOf(incident), position(0.011), 2000) { ++seq }.single() as AlertCleared).id)
         assertTrue(tracker.update(listOf(incident), position(0.011), 2000) { ++seq }.isEmpty())
+    }
+
+    @Test fun sendsAgainOnlyWhenTheGlassesCountDriftsOrEvery30Seconds() {
+        val tracker = AlertTracker(route)
+        tracker.update(listOf(incident), position(0.0), 2000) { ++seq }
+        assertTrue(tracker.update(listOf(incident), position(0.002), 3000) { ++seq }.isEmpty())
+        // The report moved 111 m along the road: the glasses' count is off, so it goes again.
+        val moved = incident.copy(location = LatLng(0.0, 0.011))
+        assertEquals(1001, (tracker.update(listOf(moved), position(0.002), 4000) { ++seq }.single() as Alert).distanceAheadMeters)
+        // Unchanged for 30 s (stopped at a light): sent again, so the glasses know it is still there.
+        assertTrue(tracker.update(listOf(moved), position(0.002), 33_999) { ++seq }.isEmpty())
+        assertTrue(tracker.update(listOf(moved), position(0.002), 34_000) { ++seq }.single() is Alert)
     }
 
     @Test fun rejectsFarSideRoadOppositeDirectionExpiredFutureAndDistantReports() {

@@ -63,7 +63,8 @@ class IncidentProviderTest {
         var seq = 0L
         fun fix(lon: Double) = PositionUpdate(0, 0.0, lon, 90f, 10f, timestampMs = System.currentTimeMillis())
         val start = tracker.update(incidents, fix(0.0), System.currentTimeMillis()) { ++seq }.single() as Alert
-        val closer = tracker.update(incidents, fix(0.005), System.currentTimeMillis()) { ++seq }.single() as Alert
+        assertTrue(tracker.update(incidents, fix(0.005), System.currentTimeMillis()) { ++seq }.isEmpty())
+        val closer = tracker.current.single()
         assertEquals(1000, start.distanceAheadMeters)
         assertTrue(closer.distanceAheadMeters < start.distanceAheadMeters)
         assertTrue(tracker.update(incidents, fix(0.02), System.currentTimeMillis()) { ++seq }.single() is AlertCleared)

@@ -221,8 +221,9 @@ class NavSessionCoordinatorTest {
         fun fix(lon: Double) = PositionUpdate(0, 0.0, lon, 90f, 10f, timestampMs = System.currentTimeMillis())
         engine.position.emit(fix(0.0)); runCurrent()
         assertEquals(1112, link.sent.filterIsInstance<Alert>().last().distanceAheadMeters)
+        // Closer: the glasses count down themselves, so no new alert message.
         engine.position.emit(fix(0.005)); runCurrent()
-        assertEquals(556, link.sent.filterIsInstance<Alert>().last().distanceAheadMeters)
+        assertEquals(1, link.sent.filterIsInstance<Alert>().size)
         link.state.value = LinkState.Paused("bluetooth"); runCurrent()
         engine.position.emit(fix(0.02)); runCurrent()
         assertTrue(link.sent.filterIsInstance<AlertCleared>().isEmpty())

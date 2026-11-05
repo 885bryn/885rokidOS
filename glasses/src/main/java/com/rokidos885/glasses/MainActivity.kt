@@ -90,7 +90,7 @@ class MainActivity:AppCompatActivity() {
             }
         }
         if(BuildConfig.DEBUG && intent.getBooleanExtra("capture",false))hud.postDelayed({
-            hud.render(vm.store.state.value)
+            hud.render(vm.store.state.value,now=true)
             val bitmap=Bitmap.createBitmap(hud.width,hud.height,Bitmap.Config.ARGB_8888)
             hud.draw(Canvas(bitmap))
             java.io.File(filesDir,"hud-preview.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
