@@ -26,7 +26,10 @@ import java.io.File
  * 2. Parakeet TDT 0.6B v3 int8, not streaming, on the raw audio: the second-pass candidate (docs/VOICE.md, 2026-11-05).
  *    Put its four files in `files/stt/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/` (adb push, as for the other model).
  * 3. Whisper small.en int8, the same way: the best on short replies on the PC. Its three `small.en-*` int8 files go in
- *    `files/stt/sherpa-onnx-whisper-small.en/`. A model that is missing is skipped.
+ *    `files/stt/sherpa-onnx-whisper-small.en/`; Whisper base.en ("whisper-base") likewise. A model that is missing is skipped.
+ *
+ * Extras: `--es engines whisper,whisper-base` runs only those (streaming, parakeet, whisper, whisper-base); `--ei threads 4`
+ * sets the threads of the whole-recording models (default 2).
  *
  * Times and memory go to logcat (tag 885rokidOSBench). The texts go only to `files/stt-bench.tsv` in the app's private folder,
  * never to logcat: they are the user's own speech. Read it with `adb exec-out run-as com.rokidos885.phone cat files/stt-bench.tsv`.
@@ -34,13 +37,15 @@ import java.io.File
 class SttBenchReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
+        val engines = intent.getStringExtra("engines")?.split(',')?.map(String::trim)?.toSet() ?: ENGINES
+        val threads = intent.getIntExtra("threads", 2)
         // Runs longer than a broadcast may last, so it does not hold the broadcast open.
         CoroutineScope(Dispatchers.Default).launch {
-            try { run(app) } catch (e: Throwable) { log("failed: ${e.javaClass.simpleName}: ${e.message}") }
+            try { run(app, engines, threads) } catch (e: Throwable) { log("failed: ${e.javaClass.simpleName}: ${e.message}") }
         }
     }
 
-    private fun run(context: Context) {
+    private fun run(context: Context, engines: Set<String>, threads: Int) {
         val files = listOf("voice-replies", "accuracy")
             .flatMap { File(context.filesDir, it).listFiles { f -> f.name.endsWith(".pcm") }.orEmpty().sortedBy { it.name } }
         if (files.isEmpty()) { log("no recordings in files/voice-replies or files/accuracy"); return }
@@ -48,8 +53,9 @@ class SttBenchReceiver : BroadcastReceiver() {
         out.writeText("engine\tfile\taudio_s\tdecode_ms\ttext\n")
         log("start: ${files.size} recordings, ${memory()}")
 
+        log("engines $engines, $threads threads")
         val streamingDir = SherpaSpeech.modelDir(context)
-        if (streamingDir == null) log("streaming model missing") else {
+        if ("streaming" !in engines) Unit else if (streamingDir == null) log("streaming model missing") else {
             val t0 = System.currentTimeMillis()
             SherpaSpeech(streamingDir, ListenLimits.DICTATION).use { engine ->
                 log("streaming ${streamingDir.name} (T3 word list) loaded in ${System.currentTimeMillis() - t0} ms, ${memory()}")
@@ -70,16 +76,18 @@ class SttBenchReceiver : BroadcastReceiver() {
         }
 
         val stt = context.getExternalFilesDir("stt")
-        val parakeet = File(stt, PARAKEET).apply { mkdirs() }
-        offline("parakeet", parakeet, listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"), files, out) { p ->
+        if ("parakeet" in engines) offline("parakeet", File(stt, PARAKEET).apply { mkdirs() },
+            listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"), files, out) { p ->
             OfflineModelConfig(
                 transducer = OfflineTransducerModelConfig(encoder = p[0], decoder = p[1], joiner = p[2]),
-                tokens = p[3], numThreads = 2, modelType = "nemo_transducer",
+                tokens = p[3], numThreads = threads, modelType = "nemo_transducer",
             )
         }
-        val whisper = File(stt, WHISPER).apply { mkdirs() }
-        offline("whisper", whisper, listOf("small.en-encoder.int8.onnx", "small.en-decoder.int8.onnx", "small.en-tokens.txt"), files, out) { p ->
-            OfflineModelConfig(whisper = OfflineWhisperModelConfig(encoder = p[0], decoder = p[1]), tokens = p[2], numThreads = 2, modelType = "whisper")
+        for ((name, size) in listOf("whisper" to "small.en", "whisper-base" to "base.en")) if (name in engines) {
+            offline(name, File(stt, "sherpa-onnx-whisper-$size").apply { mkdirs() },
+                listOf("$size-encoder.int8.onnx", "$size-decoder.int8.onnx", "$size-tokens.txt"), files, out) { p ->
+                OfflineModelConfig(whisper = OfflineWhisperModelConfig(encoder = p[0], decoder = p[1]), tokens = p[2], numThreads = threads, modelType = "whisper")
+            }
         }
         log("done")
     }
@@ -125,6 +133,6 @@ class SttBenchReceiver : BroadcastReceiver() {
 
     private companion object {
         const val PARAKEET = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
-        const val WHISPER = "sherpa-onnx-whisper-small.en"
+        val ENGINES = setOf("streaming", "parakeet", "whisper", "whisper-base")
     }
 }

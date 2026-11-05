@@ -231,5 +231,18 @@ words wrong in message replies too. Same recordings (a later run: 178 s of audio
 | Parakeet v3 | 4.6 s | 6 | 0.43 / 0.44 s | 1.1 s | 0 | 1061 MB |
 | Whisper small.en | 3.0 s | **1** | **6.8 / 10.8 s** | 6.3 s | 1 | 1047 / 1193 MB |
 
-- Whisper is the only model that is better on short replies, but each reply would wait about 7 s on the phone: Whisper
-  always decodes a 30 s window, so a short reply is not faster. Not measured: 4 threads, Whisper base.en (3 of 46 on the PC).
+- Whisper is the only model that is better on short replies, but with 2 threads each reply waited about 7 s.
+
+Threads and Whisper base.en (`--es engines … --ei threads …`, same recordings). Times vary between runs; small.en with 4
+threads ran twice.
+
+| Engine | Threads | Short replies wrong (of 46) | 5 s reply, median / slowest | 12 s dictation | Known wrong words in T3 dictations | RSS |
+|---|---|---|---|---|---|---|
+| Whisper small.en | 2 | 1 | 6.8 / 10.8 s | 6.3 s | 1 | 1047 MB |
+| Whisper small.en | 4 | **1** | **1.6 / 2.3 s** (repeat: 1.6 / 1.9 s) | 5.7–11.4 s | 1 | 1153 MB |
+| Whisper base.en | 2 | 3 | 0.6 / 1.5 s | 1.9 s | 0 | 666 MB |
+| Whisper base.en | 4 | 3 | 0.5 / 0.6 s | 3.8 s | 0 | 657 MB |
+
+- Short replies: Whisper small.en with 4 threads, about 1.6 s after the speaker stops, 1 wrong word of 46 (ours 6).
+- Long T3 dictations: Whisper small.en is too slow (6–11 s); Parakeet (1.1 s, 0 known wrong words) stays the candidate.
+- Whisper base.en is a cheaper middle: 3 of 46, under 1 s for a reply, 0 known wrong words in the dictations.
