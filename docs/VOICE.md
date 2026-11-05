@@ -117,3 +117,12 @@ glasses (Glasses tab, "Accuracy test", debug builds) and scored on the PC agains
 Built in: `SpeechAudio.preEmphasize` with c = 0.8 (middle of the good range). Clean recordings still decode the same.
 Ten phrases from one speaker is a small sample: re-run the Accuracy test after changes, and add phrases that go wrong.
 Other levers, not yet tried: a more careful model (NeMo streaming 1040 ms, 104 MB; Parakeet-TDT-CTC 110M, 104 MB), and a word list.
+
+Lost words (2026-11-05, user report: "soy sauce" often missing in T3 dictation). Two causes in the app, fixed:
+- The controller listened to `link.audio` only after `startAudio`, and that flow keeps nothing for a late listener, so the
+  first chunks could be lost. It now listens first and queues every chunk; chunks still queued at a tap are decoded too.
+- `finish` padded 0.8 s of silence, less than one 1040 ms chunk, so a word said just before a tap could stay undecoded.
+  The pad is now 2.1 s (`SherpaSpeech.TAIL_PAD_MS`).
+Not fixed by this: the glasses mic barely carries "s" sounds (see above), so "soy sauce" can still come out wrong. Next
+step: record the phrases that fail (debug builds keep the last one as `files/voice-last.pcm`) and score them on the PC
+against a word list (sherpa-onnx hotwords) and the larger models.

@@ -5,6 +5,8 @@ import com.rokidos885.protocol.T3_CARD_ID
 import com.rokidos885.protocol.VoicePhase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
@@ -107,7 +109,12 @@ class VoiceReplyController(
             try { transcriber.begin(limits) } catch (e: CancellationException) { throw e } catch (e: Throwable) { loadError = "Speech engine failed: ${e.javaClass.simpleName}"; null }
         }
         fun noModel() = loadError.ifEmpty { "Speech model missing" }
+        // Listen before the microphone opens: link.audio keeps nothing for a late listener, so the first words would be lost.
+        // The queue also keeps the chunks that arrive while the last ones are decoded, for the end of speech.
+        val incoming = Channel<ByteArray>(Channel.UNLIMITED)
+        val tap = launch(start = CoroutineStart.UNDISPATCHED) { link.audio.collect { incoming.trySend(it) } }
         if (!link.startAudio()) {
+            tap.cancel()
             report(VoicePhase.FAILED, id, "Glasses microphone not available")
             loading.cancel(); loading.invokeOnCompletion { runCatching { loading.getCompleted()?.close() } }
             return@coroutineScope
@@ -122,11 +129,11 @@ class VoiceReplyController(
             withTimeoutOrNull(limits.maxMs) {
                 coroutineScope {
                     val collector = launch {
-                        link.audio.collect { chunk ->
+                        for (chunk in incoming) {
                             onAudio?.invoke(chunk)
                             if (!live) { live = true; report(VoicePhase.LISTENING, id, "") }
                             if (speech == null) {
-                                if (!loading.isCompleted) { held.addLast(chunk); return@collect }
+                                if (!loading.isCompleted) { held.addLast(chunk); continue }
                                 speech = loading.await()
                                 if (speech == null) throw ModelMissing()
                             }
@@ -145,13 +152,16 @@ class VoiceReplyController(
             }
         } catch (_: EndOfSpeech) {
         } catch (_: ModelMissing) {
-            link.stopAudio()
+            tap.cancel(); link.stopAudio()
             return@coroutineScope
         } catch (e: CancellationException) {
-            link.stopAudio(); runCatching { loading.cancel() }
+            tap.cancel(); link.stopAudio(); runCatching { loading.cancel() }
             throw e
         }
         link.stopAudio()
+        tap.cancel()
+        // Words said just before a tap may still wait in the queue: decode them too.
+        while (true) { val chunk = incoming.tryReceive().getOrNull() ?: break; onAudio?.invoke(chunk); held.addLast(chunk) }
         audioEnded.complete(Unit)
         val engine = speech ?: runCatching { loading.await() }.getOrNull()
         if (engine == null) { if (words.isBlank()) report(VoicePhase.FAILED, id, noModel()); return@coroutineScope }

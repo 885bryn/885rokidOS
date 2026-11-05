@@ -63,9 +63,12 @@ class SherpaSpeech(modelDir: File, limits: ListenLimits = ListenLimits.REPLY) : 
         /** True once the speaker has paused long enough after speaking (or the time limit passed). */
         override fun endpoint(): Boolean = recognizer.isEndpoint(stream)
 
-        /** Pads with silence so the last words come out, and returns the final text. */
+        /**
+         * Pads with silence so the last words come out, and returns the final text. The model decodes in 1040 ms chunks,
+         * so the pad must be longer than one chunk: 0.8 s could leave the last word (said just before a tap) undecoded.
+         */
         override fun finish(): String {
-            stream.acceptWaveform(FloatArray(SAMPLE_RATE * 8 / 10), SAMPLE_RATE)
+            stream.acceptWaveform(FloatArray(SAMPLE_RATE * TAIL_PAD_MS / 1000), SAMPLE_RATE)
             stream.inputFinished()
             decodeReady()
             return recognizer.getResult(stream).text
@@ -82,6 +85,8 @@ class SherpaSpeech(modelDir: File, limits: ListenLimits = ListenLimits.REPLY) : 
 
     companion object {
         const val SAMPLE_RATE = 16_000
+        /** Silence after the last audio: two 1040 ms chunks. */
+        const val TAIL_PAD_MS = 2_100
         /**
          * Best first. The 1040 ms model made a third fewer word errors than the 80 ms one on the glasses recordings and
          * decodes faster; it only shows words about a second later (docs/LOCAL_TEST_RESULTS.md, 2026-11-04). Same settings.

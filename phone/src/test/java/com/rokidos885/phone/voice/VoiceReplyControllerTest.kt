@@ -18,7 +18,8 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class VoiceReplyControllerTest {
-    private class FakeLink(var micAvailable: Boolean = true) : GlassesLink {
+    /** [firstWords] arrive inside startAudio, as the real stream may send audio before the call returns. */
+    private class FakeLink(var micAvailable: Boolean = true, val firstWords: String? = null) : GlassesLink {
         override val state = MutableStateFlow<LinkState>(LinkState.Ready)
         override val incoming = MutableSharedFlow<NavMessage>()
         override val audio = MutableSharedFlow<ByteArray>(extraBufferCapacity = 64)
@@ -29,7 +30,10 @@ class VoiceReplyControllerTest {
         override fun connect() {}
         override fun send(message: NavMessage) = true
         override fun disconnect() {}
-        override fun startAudio(): Boolean { if (micAvailable) started++; return micAvailable }
+        override fun startAudio(): Boolean {
+            if (micAvailable) { started++; firstWords?.let { audio.tryEmit(it.toByteArray()) } }
+            return micAvailable
+        }
         override fun stopAudio() { stopped++ }
     }
 
@@ -134,6 +138,14 @@ class VoiceReplyControllerTest {
         r.link.audio.tryEmit("hi".toByteArray()); runCurrent()
         advanceTimeBy(ListenLimits.REPLY.maxMs + 100); runCurrent()
         assertEquals(VoicePhase.REVIEW, r.reports.last().phase)
+    }
+
+    @Test fun audioThatArrivesAsTheMicrophoneOpensIsNotLost() = runTest {
+        val r = rig(FakeTranscriber(), FakeLink(firstWords = "soy"))
+        r.controller.start("n1"); runCurrent()
+        r.link.audio.tryEmit("sauce".toByteArray()); runCurrent()
+        r.controller.stop(); advanceTimeBy(200); runCurrent()
+        assertEquals("Soy sauce", r.reports.last().text)
     }
 
     @Test fun t3DictationWaitsLongerForAPauseAndListensLongerThanAReply() = runTest {
