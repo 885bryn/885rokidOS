@@ -246,3 +246,19 @@ threads ran twice.
 - Short replies: Whisper small.en with 4 threads, about 1.6 s after the speaker stops, 1 wrong word of 46 (ours 6).
 - Long T3 dictations: Whisper small.en is too slow (6–11 s); Parakeet (1.1 s, 0 known wrong words) stays the candidate.
 - Whisper base.en is a cheaper middle: 3 of 46, under 1 s for a reply, 0 known wrong words in the dictations.
+
+## Speech tests with the glasses: replies and T3 instructions — 2026-11-05
+
+Debug buttons on the Glasses tab (`VoiceSpike.REPLY_SET`, `T3_SET`): the user read each phrase into the glasses microphone,
+then the phone scored the three models on the same audio. Waits are after the end of speech (second models load while the
+user speaks).
+
+- First run: 12 of 18 recordings were digital silence (peak 1) from about 30 s on: the glasses display slept (nothing held it),
+  and a sleeping display sends only zeros from the microphone. With each phrase shown on the glasses as a card (display held),
+  all 18 recordings of the second run had speech. Real voice steps hold the display, so they are not affected.
+- Second run, replies (10 phrases, 71 words): ours 4 wrong, Parakeet 7, Whisper small.en 12. Waits: 0.06 / 0.5 / 1.9 s.
+  Whisper misheard short phrases ("Hope you did help anytime", "Ready, lay, start without me").
+- Second run, T3 (8 phrases, 59 words; the user left out "the" in the soy sauce line, scored without it): ours 9 wrong,
+  Parakeet 6 (2 of them "Deep Seek"), Whisper 1. Waits: 0.14 / 0.8 / 2.6 s (slowest 3.1 s).
+- Ours: "poll latest branch and rhonotists", "amojies", "poll request", "cutland". Parakeet fixed pull, run the tests, emojis.
+- Replies over both reply sets (117 words): ours 10, Parakeet 13, Whisper 13. No second model is better for replies.
