@@ -18,6 +18,10 @@ class DictationTest {
         assertEquals("Hi", Dictation.format("hi"))
     }
 
+    @Test fun keepsTimesAndDecimals() {
+        assertEquals("See you at 7:30 It's 2.5 km away", Dictation.format("See you at 7:30. It's 2.5 km away."))
+    }
+
     @Test fun leavesOtherWordsAlone() {
         assertEquals("Pick it up in italy", Dictation.format("pick it up in italy"))
     }

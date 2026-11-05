@@ -7,7 +7,8 @@ package com.rokidos885.phone.voice
  */
 object Dictation {
     private val SPACES = Regex("\\s+")
-    private val PUNCTUATION = Regex("[.,!?;:\"]")
+    // A full stop or colon inside a number stays: Whisper (the second pass) writes "7:30" and "2.5".
+    private val PUNCTUATION = Regex("[,!?;\"]|[.:](?!\\d)")
     private val LONE_I = Regex("\\bi\\b(?=$|[\\s']|'(m|ll|ve|d))")
     private val SENTENCE_START = Regex("(^|[.!?]\\s+)(\\p{Ll})")
 

@@ -52,10 +52,12 @@ class VoiceReplyControllerTest {
 
     private class Rig(val link: FakeLink, val controller: VoiceReplyController, val reports: MutableList<Report>, val sent: MutableList<Pair<String, String>>)
 
-    private fun kotlinx.coroutines.test.TestScope.rig(transcriber: Transcriber, link: FakeLink = FakeLink(), sendResult: Boolean = true): Rig {
+    private fun kotlinx.coroutines.test.TestScope.rig(transcriber: Transcriber, link: FakeLink = FakeLink(), sendResult: Boolean = true,
+                                                      secondPass: SecondPass? = null): Rig {
         val reports = mutableListOf<Report>()
         val sent = mutableListOf<Pair<String, String>>()
-        val controller = VoiceReplyController(backgroundScope, link, transcriber, { id, text -> sent += id to text; sendResult }) { p, i, t -> reports += Report(p, i, t) }
+        val controller = VoiceReplyController(backgroundScope, link, transcriber, { id, text -> sent += id to text; sendResult },
+            secondPass = secondPass) { p, i, t -> reports += Report(p, i, t) }
         return Rig(link, controller, reports, sent)
     }
 
@@ -77,6 +79,42 @@ class VoiceReplyControllerTest {
         r.controller.send("n1"); runCurrent()
         assertEquals(listOf("n1" to "Hello there friend"), r.sent)
         assertEquals(VoicePhase.SENT, r.reports.last().phase)
+    }
+
+    /** Gives [text] for the whole recording and remembers what it read and whether it was freed. */
+    private class FakeRereader(private val text: String) : Rereader {
+        var heard = ""
+        var closed = false
+        override fun read(pcm16: ByteArray): String { heard = String(pcm16); return text }
+        override fun close() { closed = true }
+    }
+
+    @Test fun theSecondPassReplacesOurTextOnTheCheckScreenAndIsSent() = runTest {
+        val reader = FakeRereader("Hello there, friend.")
+        var loadedFor = ""
+        val r = rig(FakeTranscriber(endAfter = 3), secondPass = { id -> loadedFor = id; reader })
+        r.controller.start("n1"); runCurrent()
+        for (w in listOf("hello", "their", "fiend")) { r.link.audio.tryEmit(w.toByteArray()); runCurrent() }
+        val reviews = r.reports.filter { it.phase == VoicePhase.REVIEW }.map { it.text }
+        assertEquals("ours shows first, then the second model's", listOf("Hello their fiend", "Hello there friend"), reviews)
+        assertEquals("n1", loadedFor)
+        assertEquals("it reads the whole recording", "hellotheirfiend", reader.heard)
+        assertTrue("the second model is freed after one read", reader.closed)
+        r.controller.send("n1"); runCurrent()
+        assertEquals(listOf("n1" to "Hello there friend"), r.sent)
+    }
+
+    @Test fun anEmptyOrMuchShorterSecondPassKeepsOurText() {
+        assertEquals("see you at seven", VoiceReplyController.better("see you at seven", "[BLANK_AUDIO]"))
+        assertEquals("see you at seven tonight ok", VoiceReplyController.better("see you at seven tonight ok", "you"))
+        assertEquals("See you at 7.", VoiceReplyController.better("see you at seven", " See you at 7. "))
+    }
+
+    @Test fun withoutTheSecondModelOurTextStays() = runTest {
+        val r = rig(FakeTranscriber(endAfter = 1), secondPass = { null })
+        r.controller.start("n1"); runCurrent()
+        r.link.audio.tryEmit("hi".toByteArray()); runCurrent()
+        assertEquals(listOf("Hi"), r.reports.filter { it.phase == VoicePhase.REVIEW }.map { it.text })
     }
 
     @Test fun aTapOnTheGlassesStopsListeningEarly() = runTest {

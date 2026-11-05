@@ -49,6 +49,17 @@ interface Transcription : AutoCloseable {
     fun finish(): String
 }
 
+/**
+ * A slower, more accurate model that reads the whole recording again once the speaker stopped (docs/VOICE.md, "Second pass").
+ * [load] runs while the user speaks; null when its model is not on the phone.
+ */
+fun interface SecondPass { fun load(notificationId: String): Rereader? }
+
+interface Rereader : AutoCloseable {
+    /** The text of the whole recording (16 kHz 16-bit mono PCM). */
+    fun read(pcm16: ByteArray): String
+}
+
 /** Sends text to a notification's reply box. */
 fun interface ReplySender { fun reply(notificationId: String, text: String): Boolean }
 
@@ -67,6 +78,8 @@ class VoiceReplyController(
     private val work: CoroutineContext = EmptyCoroutineContext,
     /** Debug aid: every microphone chunk, to keep the last recording for analysis. */
     private val onAudio: ((ByteArray) -> Unit)? = null,
+    /** Reads the recording again after the speaker stopped; its text replaces ours on the check screen ([better]). */
+    private val secondPass: SecondPass? = null,
     private val report: (VoicePhase, String, String) -> Unit,
 ) {
     private var job: Job? = null
@@ -109,6 +122,11 @@ class VoiceReplyController(
             try { transcriber.begin(limits) } catch (e: CancellationException) { throw e } catch (e: Throwable) { loadError = "Speech engine failed: ${e.javaClass.simpleName}"; null }
         }
         fun noModel() = loadError.ifEmpty { "Speech model missing" }
+        // The second model loads while the user speaks, so its wait after the end is only its decode.
+        val rereading: Deferred<Rereader?>? = secondPass?.let { pass ->
+            async { try { pass.load(id) } catch (e: CancellationException) { throw e } catch (_: Throwable) { null } }
+        }
+        val recording = java.io.ByteArrayOutputStream()
         // Listen before the microphone opens: link.audio keeps nothing for a late listener, so the first words would be lost.
         // The queue also keeps the chunks that arrive while the last ones are decoded, for the end of speech.
         val incoming = Channel<ByteArray>(Channel.UNLIMITED)
@@ -130,7 +148,7 @@ class VoiceReplyController(
                 coroutineScope {
                     val collector = launch {
                         for (chunk in incoming) {
-                            onAudio?.invoke(chunk)
+                            onAudio?.invoke(chunk); recording.write(chunk)
                             if (!live) { live = true; report(VoicePhase.LISTENING, id, "") }
                             if (speech == null) {
                                 if (!loading.isCompleted) { held.addLast(chunk); continue }
@@ -152,26 +170,54 @@ class VoiceReplyController(
             }
         } catch (_: EndOfSpeech) {
         } catch (_: ModelMissing) {
-            tap.cancel(); link.stopAudio()
+            tap.cancel(); link.stopAudio(); rereading?.let(::drop)
             return@coroutineScope
         } catch (e: CancellationException) {
-            tap.cancel(); link.stopAudio(); runCatching { loading.cancel() }
+            tap.cancel(); link.stopAudio(); runCatching { loading.cancel() }; rereading?.let(::drop)
             throw e
         }
         link.stopAudio()
         tap.cancel()
         // Words said just before a tap may still wait in the queue: decode them too.
-        while (true) { val chunk = incoming.tryReceive().getOrNull() ?: break; onAudio?.invoke(chunk); held.addLast(chunk) }
+        while (true) { val chunk = incoming.tryReceive().getOrNull() ?: break; onAudio?.invoke(chunk); recording.write(chunk); held.addLast(chunk) }
         audioEnded.complete(Unit)
         val engine = speech ?: runCatching { loading.await() }.getOrNull()
-        if (engine == null) { if (words.isBlank()) report(VoicePhase.FAILED, id, noModel()); return@coroutineScope }
+        if (engine == null) { if (words.isBlank()) report(VoicePhase.FAILED, id, noModel()); rereading?.let(::drop); return@coroutineScope }
+        var ours = ""
         engine.use {
             while (held.isNotEmpty()) words = it.accept(held.removeFirst())
-            val finalText = it.finish().ifBlank { words }
-            if (finalText.isBlank()) { report(VoicePhase.FAILED, id, "Heard nothing"); return@use }
-            reviewed = finalText
-            report(VoicePhase.REVIEW, id, Dictation.format(finalText))
+            ours = it.finish().ifBlank { words }
         }
+        if (ours.isBlank()) { report(VoicePhase.FAILED, id, "Heard nothing"); rereading?.let(::drop); return@coroutineScope }
+        // Our text shows at once; the second model's text replaces it when ready, unless the user already sent or left.
+        reviewed = ours
+        report(VoicePhase.REVIEW, id, Dictation.format(ours))
+        val reader = rereading?.await() ?: return@coroutineScope
+        val theirs = reader.use { r -> runCatching { r.read(recording.toByteArray()) }.getOrDefault("") }
+        val text = better(ours, theirs)
+        if (text != ours && activeId == id && reviewed == ours) {
+            reviewed = text
+            report(VoicePhase.REVIEW, id, Dictation.format(text))
+        }
+    }
+
+    /** Frees a second model that loads or has loaded, without waiting for it. */
+    private fun drop(rereading: Deferred<Rereader?>) {
+        rereading.cancel()
+        rereading.invokeOnCompletion { runCatching { rereading.getCompleted()?.close() } }
+    }
+
+    companion object {
+        /**
+         * The second model's text, unless it is empty or much shorter than ours (it may drop a short or quiet recording, and
+         * Whisper writes "[BLANK_AUDIO]" or "(music)" for noise).
+         */
+        fun better(ours: String, theirs: String): String {
+            val clean = theirs.replace(NOISE_TAG, " ").trim().replace(Regex("\\s+"), " ")
+            val count = { t: String -> t.split(' ').count { it.isNotBlank() } }
+            return if (clean.isEmpty() || count(clean) * 2 < count(ours)) ours else clean
+        }
+        private val NOISE_TAG = Regex("\\[[^]]*]|\\([^)]*\\)")
     }
 
     private class EndOfSpeech : RuntimeException()
