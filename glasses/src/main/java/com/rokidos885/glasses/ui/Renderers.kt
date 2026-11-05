@@ -564,6 +564,7 @@ class HudRenderer(context: Context) {
         aheadMeters=MapZoom.ease(aheadMeters,target,dt)
         zoomTarget=target
         val ppm=(if(compact)148f else 188f)/aheadMeters
+        lastPpm=ppm
         val t=((nanos-receivedNanos)/1_000_000.0/transitionMs).toFloat().coerceIn(0f,1f)
         val px=previousX+(currentX-previousX)*t; val py=previousY+(currentY-previousY)*t
         val heading=previousBearing+((currentBearing-previousBearing+540)%360-180)*t
@@ -710,6 +711,21 @@ class HudRenderer(context: Context) {
     /** True while the map zoom is still easing toward its target, so the view keeps redrawing. */
     val zoomSettling get()=aheadMeters>0f && kotlin.math.abs(aheadMeters-zoomTarget)>aheadMeters*0.01f
     private var lastFrameNanos=0L
+    private var lastPpm=0f
+    /**
+     * Delay to the next map frame, at least [minMs], or 0 for none. Zoom easing runs at [minMs]. The glide between
+     * two fixes draws a frame only per [MIN_STEP_PX] of movement on screen (slide or turn), so a slow or zoomed-out
+     * map draws fewer frames; under one step per second it waits for the next fix.
+     */
+    fun nextFrameMs(minMs:Long):Long {
+        if(zoomSettling)return minMs
+        if(!moving)return 0
+        val slide=kotlin.math.hypot(currentX-previousX,currentY-previousY)*lastPpm
+        val turn=kotlin.math.abs((currentBearing-previousBearing+540f)%360f-180f)*(Math.PI.toFloat()/180f)*TURN_RADIUS_PX
+        val pxPerSecond=maxOf(slide,turn)/(transitionMs/1000f)
+        if(pxPerSecond<MIN_STEP_PX)return 0
+        return (1000f*MIN_STEP_PX/pxPerSecond).toLong().coerceAtLeast(minMs)
+    }
     private fun List<TrafficSegment>.anyJamInWindow(along:Int,visible:Int):Boolean {
         var i=0;while(i<size){val t=this[i];if(t.level==TrafficLevel.JAM && t.endMeters>along && t.startMeters<along+visible)return true;i++};return false
     }
@@ -902,6 +918,10 @@ class HudRenderer(context: Context) {
         const val ALERT_FRESH_MS = 6_000L
         private const val MEDIA_W = 444f
         private const val T3_W = 444f
+        /** Smallest map movement worth a frame, in design px. */
+        const val MIN_STEP_PX = 2f
+        /** A turn moves the map edge about this far from the chevron per radian, in design px. */
+        private const val TURN_RADIUS_PX = 150f
         /** Cards narrower than this are the trip's corner card (222 wide). */
         private const val NARROW_CARD = 300f
         /** Shown without a trip while a Grok Bot chat runs (on a trip the display stays on anyway). */

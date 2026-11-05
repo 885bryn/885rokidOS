@@ -101,7 +101,11 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
                 val tracker=AlertTracker(PolylineCodec.decode(route.encodedPolyline)) {preferences.alertToleranceMeters}
                 coroutineScope {
                     var snapshot=emptyList<Incident>();var position:PositionUpdate?=null
-                    fun update(){position?.let {tracker.update(snapshot,it,System.currentTimeMillis(),seq::next).forEach(::sendAlert)}}
+                    fun update(){position?.let {
+                        tracker.update(snapshot,it,System.currentTimeMillis(),seq::next).forEach(::sendAlert)
+                        // The glasses get an alert only when their own count drifts; the voice and resync use each fix.
+                        tracker.current.forEach {a->announce(a);activeAlerts[a.id]=a;lastSent["alert:${a.id}"]=a}
+                    }}
                     launch {incidents.incidentsAlong(route.encodedPolyline).collect {snapshot=it;update()}}
                     launch {engine.position.collect {position=it;update()}}
                     launch {while(isActive){delay(1000);update()}}
@@ -145,9 +149,9 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         }
         return out.ifEmpty {listOf(points.last())}
     }
+    // Voice is phone-side, so warnings still play while the glasses are paused or disconnected.
+    private fun announce(a:Alert){announcer.consider(a)?.let {speaker?.speak(it)}}
     private fun sendAlert(m:NavMessage) {
-        // Voice is phone-side, so warnings still play while the glasses are paused or disconnected.
-        if(m is Alert)announcer.consider(m)?.let {speaker?.speak(it)}
         val id=when(m){is Alert->{activeAlerts[m.id]=m;m.id};is AlertCleared->{activeAlerts.remove(m.id);m.id};else->return}
         sendStateful("alert:$id",m)
     }

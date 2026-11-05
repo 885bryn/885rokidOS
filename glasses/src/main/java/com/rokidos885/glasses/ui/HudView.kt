@@ -13,13 +13,25 @@ import com.rokidos885.glasses.state.HudState
  * between the phone's ~1 Hz fixes (10 fps big map, 5 fps corner map; lowered 2026-10-20). Exactly one
  * frame is ever pending: re-posting on every draw used to stack loops and ran at ~48 fps.
  * Demo mode (phone setting) runs the visible map at 30 fps all the time instead.
+ *
+ * One fix brings 3 or 4 messages (position, progress, maneuver, alert): [render] collects the states of
+ * [RENDER_BATCH_MS] into one prepare and one draw. The glide also skips frames that would move the map by less
+ * than a step ([HudRenderer.nextFrameMs]).
  */
 class HudView(context: Context) : View(context) {
+    /** The state the renderer last prepared, so a draw never mixes two states. */
     private var state = HudState()
+    private var pending: HudState? = null
     private val renderer=HudRenderer(context)
     private val nextFrame=Runnable { invalidate() }
+    private val renderPending=Runnable { pending?.let { pending=null;state=it;renderer.prepare(it);invalidate() } }
     init { setBackgroundColor(Color.BLACK) }
-    fun render(newState:HudState){state=newState;renderer.prepare(newState);invalidate()}
+    /** Shows [newState] within [RENDER_BATCH_MS], together with what else comes in that time; [now] for captures. */
+    fun render(newState:HudState,now:Boolean=false){
+        val first=pending==null
+        pending=newState
+        if(now){removeCallbacks(renderPending);renderPending.run()} else if(first)postDelayed(renderPending,RENDER_BATCH_MS)
+    }
     override fun onDraw(canvas:Canvas){
         super.onDraw(canvas)
         // The native glasses Activity is portrait. Independent X/Y scales made text 61% taller.
@@ -34,11 +46,15 @@ class HudView(context: Context) : View(context) {
         removeCallbacks(nextFrame)
         val mapShown=state.mode!=com.rokidos885.glasses.state.HudMode.Minimal
         val demo=state.demoMode && state.position!=null
-        if(isAttachedToWindow && mapShown && (demo || renderer.zoomSettling || renderer.moving))
-            postDelayed(nextFrame,if(demo)DEMO_FRAME_MS else if(compact)COMPACT_FRAME_MS else FRAME_MS)
+        if(isAttachedToWindow && mapShown) {
+            val delay=if(demo)DEMO_FRAME_MS else renderer.nextFrameMs(if(compact)COMPACT_FRAME_MS else FRAME_MS)
+            if(delay>0)postDelayed(nextFrame,delay)
+        }
     }
-    override fun onDetachedFromWindow(){removeCallbacks(nextFrame);super.onDetachedFromWindow()}
+    override fun onDetachedFromWindow(){removeCallbacks(nextFrame);removeCallbacks(renderPending);super.onDetachedFromWindow()}
     private companion object {
+        /** Longer than the spread of one fix's messages, short enough that a tap still feels at once. */
+        const val RENDER_BATCH_MS=50L
         const val FRAME_MS=100L
         const val COMPACT_FRAME_MS=200L
         const val DEMO_FRAME_MS=33L

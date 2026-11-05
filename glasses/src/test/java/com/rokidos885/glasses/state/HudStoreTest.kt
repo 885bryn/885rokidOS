@@ -377,6 +377,41 @@ class HudStoreTest {
         assertEquals(0,hud.state.value.wakeSeq)
     }
 
+    @Test fun theTickSleepsWhenNothingOnScreenDependsOnTime() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true)
+        // Awake, the countdown needs it; asleep at home, nothing does.
+        assertEquals(true,hud.needsTick())
+        hud.onDisplayOff()
+        assertEquals(false,hud.needsTick())
+        // A card, the player or a trip each need it again.
+        hud.onMessage(replyCard(canReply=false))
+        assertEquals(true,hud.needsTick())
+        now+=HudStore.NOTIFICATION_MAX_MS;hud.tick()
+        assertEquals(false,hud.needsTick())
+        hud.onMessage(com.rokidos885.protocol.NavStateUpdate(cardSeq++,com.rokidos885.protocol.NavState.ACTIVE))
+        assertEquals(true,hud.needsTick())
+    }
+
+    @Test fun theGlassesCountAnAlertDownFromTheirOwnFixes() {
+        val hud=HudStore({1_000L}) {sent+=it}
+        fun fix(seq:Long,along:Int)=com.rokidos885.protocol.PositionUpdate(seq,37.0,-122.0,0f,20f,along,seq*1_000)
+        hud.onMessage(fix(1,1_000))
+        hud.onMessage(com.rokidos885.protocol.Alert(2,"p1",com.rokidos885.protocol.AlertKind.POLICE,800,37.01,-122.0,"Police","WzSabre"))
+        hud.onMessage(fix(3,1_300))
+        assertEquals(500,hud.state.value.alerts.single().distanceAheadMeters)
+        // It stays at 0 m past the pin, until the phone clears it.
+        hud.onMessage(fix(4,1_900))
+        assertEquals(0,hud.state.value.alerts.single().distanceAheadMeters)
+        // A fix far behind (a new route) leaves the distance for the phone to send again.
+        hud.onMessage(fix(5,100))
+        assertEquals(0,hud.state.value.alerts.single().distanceAheadMeters)
+        hud.onMessage(com.rokidos885.protocol.Alert(6,"p1",com.rokidos885.protocol.AlertKind.POLICE,700,37.01,-122.0,"Police","WzSabre"))
+        hud.onMessage(fix(7,200))
+        assertEquals(600,hud.state.value.alerts.single().distanceAheadMeters)
+    }
+
     @Test fun onATripTapStartsGrokBotAndSwipeForwardStepsTheView() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
