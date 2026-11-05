@@ -88,6 +88,7 @@ class RokidOs885App : Application() {
             grokBotRunning = {com.rokidos885.phone.voice.GrokBot.running(this)},
             callRecordings = {com.rokidos885.phone.voice.GrokBot.callRecordings(this)},
             onVoiceStart = {t3.quiet()},
+            callVolume = com.rokidos885.phone.voice.AndroidCallVolume(this),
         )
         t3=com.rokidos885.phone.code.T3Mini(appScope,com.rokidos885.phone.code.T3Client(this),object:com.rokidos885.phone.code.T3Voice {
             override fun speak(text:String)=t3Voice.speak(text)

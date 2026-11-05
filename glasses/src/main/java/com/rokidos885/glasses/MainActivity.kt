@@ -71,7 +71,7 @@ class MainActivity:AppCompatActivity() {
         lifecycleScope.launch {repeatOnLifecycle(Lifecycle.State.STARTED){vm.store.state.collect {hud.render(it)}}}
         // Not tied to STARTED: the display hold and the wake for T3 news must work while the display sleeps.
         lifecycleScope.launch {vm.store.state.collect {keepScreenOn(it)}}
-        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|t3).
+        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|t3|grok).
         // The big message numbers make the store ignore the demo trip's own messages.
         if(BuildConfig.DEBUG)intent.getStringExtra("previewScene")?.let {scene->
             val n=1_000_000_000L
@@ -81,6 +81,8 @@ class MainActivity:AppCompatActivity() {
                 store.onMessage(com.rokidos885.protocol.T3Status(n+1,"Fix the glasses build","claude-opus-5-5",com.rokidos885.protocol.T3State.REPLY,
                     "Run the unit tests and tell me what fails","All 214 tests pass. The build is green, and I changed nothing."))
                 store.onKey(GlassesKey.SWIPE_BACK)
+            } else if(scene=="grok") {
+                store.onConnection(true);store.onMessage(com.rokidos885.protocol.GrokBotState(n+1,true,60))
             } else if(scene=="media") {
                 store.onMessage(com.rokidos885.protocol.MediaState(n+1,true,"Spotify","Midnight City, a very long track title that wraps","M83",true,0,0))
                 store.onKey(GlassesKey.SWIPE_FORWARD)

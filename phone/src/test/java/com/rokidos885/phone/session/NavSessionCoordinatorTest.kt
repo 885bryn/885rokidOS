@@ -162,6 +162,59 @@ class NavSessionCoordinatorTest {
         chat = true; advanceTimeBy(30_000); runCurrent()
         assertEquals(listOf(false), states())
     }
+    @Test fun aGrokBotChatStartsAtHalfVolumeAndASwipeStepsIt() = runTest {
+        val engine = Engine()
+        val link = Link()
+        var chat = false
+        var level = 100
+        var halves = 0
+        var bluetooth = false
+        val volume = object : com.rokidos885.phone.voice.CallVolume {
+            override fun half(): Boolean { halves++; level = 50; return bluetooth }
+            override fun step(up: Boolean): Int { level = (level + if (up) 10 else -10).coerceIn(0, 100); return level }
+            override fun percent() = level
+        }
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents,
+            openGrokBot = { null }, grokBotRunning = { chat }, callVolume = volume)
+        coordinator.start(); runCurrent(); link.sent.clear()
+        fun states() = link.sent.filterIsInstance<GrokBotState>().map { it.active to it.volume }
+        // No chat: a swipe does nothing.
+        link.incoming.emit(GlassesAction(1, ActionType.VOLUME_UP, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals(100, level)
+        link.incoming.emit(GlassesAction(2, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        chat = true; advanceTimeBy(1_500); runCurrent()
+        assertEquals(listOf(true to 50), states())
+        // Set again until the call audio is on Bluetooth, then left alone.
+        bluetooth = true; advanceTimeBy(1_000); runCurrent()
+        val after = halves
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(after, halves)
+        // A swipe steps the volume and the glasses hear the new level.
+        link.sent.clear(); link.incoming.emit(GlassesAction(3, ActionType.VOLUME_DOWN, VOICE_COMMAND_ID)); runCurrent()
+        assertEquals(listOf(true to 40), states())
+        // The chat ends: no volume.
+        link.sent.clear(); chat = false; advanceTimeBy(1_500); runCurrent()
+        assertEquals(listOf(false to -1), states())
+    }
+    @Test fun aSwipeBeforeTheAudioIsOnBluetoothKeepsTheUsersVolume() = runTest {
+        val engine = Engine()
+        val link = Link()
+        var chat = false
+        var level = 100
+        val volume = object : com.rokidos885.phone.voice.CallVolume {
+            override fun half(): Boolean { level = 50; return false }
+            override fun step(up: Boolean): Int { level += if (up) 10 else -10; return level }
+            override fun percent() = level
+        }
+        val coordinator = NavSessionCoordinator(backgroundScope, link, engine, TrafficMonitor(RoutesApiClient(""), engine), noIncidents,
+            openGrokBot = { null }, grokBotRunning = { chat }, callVolume = volume)
+        coordinator.start(); runCurrent()
+        link.incoming.emit(GlassesAction(1, ActionType.OPEN_GROK_BOT, VOICE_COMMAND_ID)); runCurrent()
+        chat = true; advanceTimeBy(1_500); runCurrent()
+        link.incoming.emit(GlassesAction(2, ActionType.VOLUME_UP, VOICE_COMMAND_ID)); runCurrent()
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(60, level)
+    }
     @Test fun duringAnotherAppsCallTheChatIsTheExtraCallRecording() = runTest {
         val engine = Engine()
         val link = Link()

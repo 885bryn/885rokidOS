@@ -228,10 +228,11 @@ const val VOICE_COMMAND_ID = "voice-command"
 
 /**
  * A Grok Bot voice chat started from the glasses runs on the phone ([active]) or ended. Meanwhile the glasses keep the
- * display on and show that a tap ends it, so the ending tap never only wakes a sleeping display. Sent on change and on resync.
+ * display on and show that a tap ends it, so the ending tap never only wakes a sleeping display. [volume] is the call
+ * volume in percent (-1 unknown); a swipe changes it (VOLUME_UP, VOLUME_DOWN). Sent on change and on resync.
  */
 @Serializable @SerialName("grok_bot")
-data class GrokBotState(override val seq: Long, val active: Boolean) : NavMessage
+data class GrokBotState(override val seq: Long, val active: Boolean, val volume: Int = -1) : NavMessage
 
 /**
  * [VoiceState.notificationId] and [GlassesAction.targetId] of a dictation to T3 Code on the PC (the T3 page). The usual
@@ -310,6 +311,8 @@ data class ResyncRequest(override val seq: Long, val reason: String = "") : NavM
     VOICE_START, VOICE_STOP, VOICE_SEND, VOICE_REDO, VOICE_CANCEL,
     /** Start a Grok Bot voice chat on the phone, no speech step; targetId [VOICE_COMMAND_ID]. The phone answers SENT or FAILED. */
     OPEN_GROK_BOT,
+    /** The call volume of a running Grok Bot chat one step up or down; the phone answers with [GrokBotState.volume]. */
+    VOLUME_UP, VOLUME_DOWN,
 }
 
 /** Mirrors the Google Navigation SDK maneuver set closely enough to map 1:1 (see NavInfoMapper). */

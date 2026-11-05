@@ -61,10 +61,13 @@ Zoom is not on the glasses: the map frames the next turns itself, and the phone 
 
 | Screen | Tap | Swipe | Double tap |
 |---|---|---|---|
-| "GROK BOT" card (2 s after each tap) | Start or end Grok Bot again | — | Close the card |
-| "GROK BOT · TAP to end" (no trip, chat runs) | End the chat | — | Leave to the Rokid menu |
+| "GROK BOT" card (2 s after each tap) | Start or end Grok Bot again | Volume, once the chat runs | Close the card |
+| "GROK BOT · TAP to end" (no trip, chat runs) | End the chat | Volume: forward louder, back quieter | Leave to the Rokid menu |
 
-While a chat runs, the display stays on, so the tap that ends it always arrives.
+While a chat runs, the display stays on, so the tap that ends it always arrives. A chat starts at half call volume
+(Bluetooth call volume is full by default). On every screen, a swipe steps the volume while the chat runs: then it does
+not show the T3 page or the player, or change the trip view. The symbol "‹ speaker ▂▃▅▆▇ ›" reminds you of this; the lit
+bars are the volume. On a trip it is the only sign of the chat, in the top-left corner (top centre in the full map).
 
 ## Voice reply
 
