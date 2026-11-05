@@ -47,6 +47,8 @@ You need:
 Copy `local.properties.example` to `local.properties` and set `sdk.dir` and `MAPS_API_KEY`. The key is
 never committed. For police reports, install the [WzSabre](https://wzsabre.rocks/) plugin on the phone.
 
+To code from the glasses at any time, set up a computer that stays on: [Always-on T3 host](docs/ALWAYS-ON-HOST.md).
+
 ## Build and test
 
 ```powershell
