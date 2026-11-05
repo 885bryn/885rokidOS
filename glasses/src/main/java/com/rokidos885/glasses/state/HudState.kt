@@ -49,6 +49,8 @@ data class HudState(
     val voiceFocus: Int = 0,
     /** A Grok Bot chat runs on the phone: the display stays on and shows that a tap ends it. */
     val grokBotActive: Boolean = false,
+    /** The chat's call volume in percent, or -1 when the phone did not say. A swipe steps it. */
+    val grokVolume: Int = -1,
 
     /** What the phone plays, or null. Only track, artist and play state matter: nothing here moves with time. */
     val media: MediaState? = null,

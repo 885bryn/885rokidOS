@@ -94,7 +94,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 if(m.phase==VoicePhase.IDLE)s.copy(voice=null,voiceFocus=0)
                 else s.copy(voice=m,voiceAt=clock(),nowMs=clock(),voiceFocus=if(s.voice?.phase==m.phase)s.voiceFocus else 0)
             }
-            is GrokBotState->mutable.update {it.copy(grokBotActive=m.active)}
+            is GrokBotState->mutable.update {it.copy(grokBotActive=m.active,grokVolume=if(m.active)m.volume else -1)}
             is T3Status->t3News(m)
             else->Unit
         }
@@ -146,6 +146,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
                 lastMediaKey=key;lastMediaKeyAt=clock()
                 mutable.update {it.copy(notification=null)}
             }
+            // A Grok Bot chat on, on every screen: a swipe steps its call volume (forward louder), nothing else.
+            s.grokBotActive && swipe(key)->if(!repeated(key))volume(key)
             // No trip, the T3 page: swipe forward or double tap goes home; a tap starts dictation.
             idle(s) && s.t3Page->t3Key(s,key)
             // No trip and the player on screen: tap plays or pauses, swipes skip a track, double tap goes home.
@@ -180,6 +182,8 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
         sendAction(GlassesAction(0,action,id))
         mutable.update {it.copy(voice=VoiceState(0,VoicePhase.STARTING,id),voiceAt=clock(),mediaShown=false)}
     }
+    private fun swipe(key:GlassesKey)=key==GlassesKey.SWIPE_FORWARD || key==GlassesKey.SWIPE_BACK
+    private fun volume(key:GlassesKey)=sendAction(GlassesAction(0,if(key==GlassesKey.SWIPE_FORWARD)ActionType.VOLUME_UP else ActionType.VOLUME_DOWN,VOICE_COMMAND_ID))
     /** True when [key] is the last accepted gesture arriving again by another input path; otherwise records it (see mediaKey). */
     private fun repeated(key:GlassesKey):Boolean {
         val now=clock()
@@ -244,6 +248,17 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     }
     /** The display went to sleep (SCREEN_OFF): the touch that wakes it only wakes it. */
     fun onDisplayOff(){mutable.update {it.copy(awake=false,sleepIn=0)}}
+    /**
+     * The display came on (SCREEN_ON). Android keeps a key that wakes the display from the app, so the waking tap may
+     * never reach [onKey]: the display coming on is the wake then, and the next tap acts (seen 2026-11-05: 3 taps to
+     * Grok Bot). A waking key that does arrive later is dropped as part of the same gesture.
+     */
+    fun onDisplayOn() {
+        val now=clock()
+        awakeAt=now
+        if(!state.value.awake){wokeAt=now;mutable.update {it.copy(awake=true,sleepIn=0)}}
+        kick.trySend(Unit)
+    }
     /** Keys during a voice reply. Everything is consumed so a swipe never skips a song or the double tap never exits. */
     private fun voiceKey(s:HudState,v:VoiceState,key:GlassesKey) {
         val id=v.notificationId
@@ -259,6 +274,7 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
             startVoice(id,key,ActionType.OPEN_GROK_BOT)
             return
         }
+        if(id==VOICE_COMMAND_ID && v.phase in GROK_CARD && s.grokBotActive && swipe(key)){volume(key);return}
         when(v.phase) {
             VoicePhase.STARTING->if(key==GlassesKey.DOUBLE_TAP || key==GlassesKey.BACK)cancel()
             VoicePhase.LISTENING->when(key) {

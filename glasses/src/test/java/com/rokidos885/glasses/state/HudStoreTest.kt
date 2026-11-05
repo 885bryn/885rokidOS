@@ -289,6 +289,24 @@ class HudStoreTest {
         assertEquals(com.rokidos885.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
     }
 
+    @Test fun theDisplayComingOnIsTheWakeWhenTheSystemKeepsTheWakingTap() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(t3(1))
+        hud.onDisplayOff()
+        // The system used the tap to turn the display on and did not deliver it: ACTIVE shows, the next tap starts Grok Bot.
+        hud.onDisplayOn()
+        assertEquals(true,hud.state.value.homeActive)
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(ActionType.OPEN_GROK_BOT,sent.single().action)
+        sent.clear()
+        // The system delivered the waking tap after SCREEN_ON: it is the same gesture, so it sends nothing.
+        hud.onMessage(com.rokidos885.protocol.VoiceState(2,com.rokidos885.protocol.VoicePhase.IDLE,com.rokidos885.protocol.VOICE_COMMAND_ID))
+        hud.onDisplayOff()
+        hud.onDisplayOn();now+=100;hud.onKey(GlassesKey.TAP)
+        assertEquals(emptyList<GlassesAction>(),sent)
+    }
+
     @Test fun awakeCountsDownFromFourThenTheHudLetsTheDisplaySleep() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}
@@ -544,6 +562,31 @@ class HudStoreTest {
         // Without the link nobody can say it ended: the display is not held for it.
         hud.onMessage(com.rokidos885.protocol.GrokBotState(3,true));hud.onConnection(false)
         assertEquals(false,hud.state.value.grokBotActive)
+    }
+
+    @Test fun duringAGrokBotChatASwipeStepsTheVolumeOnEveryScreen() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true)
+        hud.onMessage(com.rokidos885.protocol.GrokBotState(1,true,50))
+        assertEquals(50,hud.state.value.grokVolume)
+        // Home: swipe forward is louder, swipe back quieter; the T3 page does not come up. A second report is the same swipe.
+        hud.onKey(GlassesKey.SWIPE_FORWARD);hud.onKey(GlassesKey.SWIPE_FORWARD)
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_BACK)
+        assertEquals(listOf(ActionType.VOLUME_UP,ActionType.VOLUME_DOWN),sent.map {it.action})
+        assertEquals(false,hud.state.value.t3Page)
+        // On a trip the view stays as it is.
+        sent.clear()
+        hud.onMessage(com.rokidos885.protocol.NavStateUpdate(2,com.rokidos885.protocol.NavState.ACTIVE))
+        val mode=hud.state.value.mode
+        now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(listOf(ActionType.VOLUME_UP),sent.map {it.action})
+        assertEquals(mode,hud.state.value.mode)
+        // The chat ends: the volume is unknown again and a swipe moves the view.
+        hud.onMessage(com.rokidos885.protocol.GrokBotState(3,false,-1))
+        assertEquals(-1,hud.state.value.grokVolume)
+        sent.clear();now+=HudStore.MEDIA_KEY_GAP_MS;hud.onKey(GlassesKey.SWIPE_FORWARD)
+        assertEquals(emptyList<GlassesAction>(),sent)
     }
 
     @Test fun aTapOnTheGrokBotCardStartsOrClosesGrokBotAgain() {

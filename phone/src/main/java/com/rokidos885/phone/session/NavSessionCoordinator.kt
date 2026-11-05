@@ -27,6 +27,8 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private val callRecordings:()->Int={0},
     /** A dictation or Grok Bot starts (its id): a T3 reply still being read must stop, or the microphone hears it. */
     private val onVoiceStart:(String)->Unit={},
+    /** The call volume of a Grok Bot chat: half at its start, a glasses swipe steps it. */
+    private val callVolume:com.rokidos885.phone.voice.CallVolume?=null,
     // The glasses HUD outlives the phone app and drops any message numbered at or below the last it saw, so a
     // restarted phone must count higher than before: start from the clock (a restart is always later).
     seqStart:Long=System.currentTimeMillis()) {
@@ -51,6 +53,10 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
     private var grokWatch:Job?=null
     /** Call recordings already on at a start during another app's call; null when the call mode was free. */
     private var grokBase:Int?=null
+    private var grokVolume=-1
+    private var sentVolume=-1
+    /** A swipe changed the volume of this chat: the half-volume start leaves it alone. */
+    private var grokAdjusted=false
     fun sendTestSnapshot(build:(()->Long)->List<NavMessage>) {
         if(link.state.value==LinkState.Ready)build(seq::next).forEach {link.send(it)}
     }
@@ -174,21 +180,29 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         lastSent.filterKeys {it!="session"}.values.forEach {link.send(fresh(it))}
         offer.value?.takeIf {it.expiresAtMs>System.currentTimeMillis()}?.let {link.send(it.copy(seq=seq.next()))}
         // Sent either way: a HUD that kept "active" from before a phone restart clears it.
-        link.send(GrokBotState(seq.next(),grokActive))
+        sendGrokBot()
     }
+    private fun sendGrokBot()=link.send(GrokBotState(seq.next(),grokActive,if(grokActive)grokVolume else -1))
     /**
      * Follows the Grok Bot chat a glasses gesture started or closed, polling [grokBotRunning] each second (Android tells
      * other apps of a mode change only from API 31). Tells the glasses on each change. Stops when the chat ends, or after
-     * [GROK_START_MS] when none started.
+     * [GROK_START_MS] when none started. A new chat starts at half volume: set again on each poll until the call audio is on
+     * Bluetooth (each output keeps its own volume) or [GROK_HALF_TRIES] polls, unless a swipe changed it first.
      */
     private fun watchGrokBot() {
         grokWatch?.cancel()
         grokWatch=scope.launch {
             var waited=0L
             var seen=false
+            var tries=0
             while(true) {
                 val running=grokRunning()
-                if(running!=grokActive){grokActive=running;link.send(GrokBotState(seq.next(),running))}
+                if(running && !grokActive){grokAdjusted=false;tries=0}
+                val volume=callVolume
+                if(running && volume!=null && !grokAdjusted && tries<GROK_HALF_TRIES)
+                    runCatching {if(volume.half())tries=GROK_HALF_TRIES else tries++;grokVolume=volume.percent()}.onFailure {tries=GROK_HALF_TRIES}
+                val volumeNow=if(running)grokVolume else -1
+                if(running!=grokActive || (running && volumeNow!=sentVolume)){grokActive=running;sentVolume=volumeNow;sendGrokBot()}
                 if(running)seen=true
                 if(!running && (seen || waited>=GROK_START_MS)){grokBase=null;break}
                 delay(GROK_POLL_MS);waited+=GROK_POLL_MS
@@ -275,6 +289,13 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
                 link.send(VoiceState(seq.next(),if(problem==null)VoicePhase.SENT else VoicePhase.FAILED,VOICE_COMMAND_ID,problem ?: done))
                 if(problem==null)watchGrokBot()
             }
+            ActionType.VOLUME_UP,ActionType.VOLUME_DOWN->{
+                val volume=callVolume ?: return
+                if(!grokActive)return
+                grokAdjusted=true
+                grokVolume=runCatching {volume.step(a.action==ActionType.VOLUME_UP)}.getOrDefault(grokVolume)
+                sentVolume=grokVolume;sendGrokBot()
+            }
             ActionType.MEDIA_PLAY_PAUSE->media?.playPause()
             ActionType.MEDIA_NEXT->media?.next()
             ActionType.MEDIA_PREVIOUS->media?.previous()
@@ -284,5 +305,7 @@ class NavSessionCoordinator(private val scope:CoroutineScope,private val link:Gl
         const val GROK_POLL_MS=1_000L
         /** Grok Bot set its chat mode about 1 s after the start (2026-11-03); more is a start that failed. */
         const val GROK_START_MS=10_000L
+        /** Grok Bot's call audio reached the glasses within 2 s of its call mode (assumed); later the volume stays as set. */
+        const val GROK_HALF_TRIES=4
     }
 }

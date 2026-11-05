@@ -12,7 +12,8 @@ The 885rokidOS HUD uses the right temple touchpad. Code: `glasses/.../state/HudS
 | **Touch and hold** | Rokid AI assistant (system). The HUD does not use it (decided 2026-11-05). |
 
 **Wake rule.** The touch that wakes a sleeping display only wakes it, on every screen. The next touch acts. One
-gesture counts once, even when the glasses report it two or three times (600 ms guard).
+gesture counts once, even when the glasses report it two or three times (600 ms guard). Android often keeps the
+waking touch from the app, so the display coming on also counts as the wake: one touch wakes, the next acts.
 
 **Awake and sleep.** The HUD stays awake for the system's screen timeout (at least 10 s) after the last touch, or after
 a trip, card, voice step or Grok Bot chat lets go of the display. News from T3 starts the time again. The last 4 s
@@ -60,10 +61,13 @@ Zoom is not on the glasses: the map frames the next turns itself, and the phone 
 
 | Screen | Tap | Swipe | Double tap |
 |---|---|---|---|
-| "GROK BOT" card (2 s after each tap) | Start or end Grok Bot again | — | Close the card |
-| "GROK BOT · TAP to end" (no trip, chat runs) | End the chat | — | Leave to the Rokid menu |
+| "GROK BOT" card (2 s after each tap) | Start or end Grok Bot again | Volume, once the chat runs | Close the card |
+| "GROK BOT · TAP to end" (no trip, chat runs) | End the chat | Volume: forward louder, back quieter | Leave to the Rokid menu |
 
-While a chat runs, the display stays on, so the tap that ends it always arrives.
+While a chat runs, the display stays on, so the tap that ends it always arrives. A chat starts at half call volume
+(Bluetooth call volume is full by default). On every screen, a swipe steps the volume while the chat runs: then it does
+not show the T3 page or the player, or change the trip view. The symbol "‹ speaker ▂▃▅▆▇ ›" reminds you of this; the lit
+bars are the volume. On a trip it is the only sign of the chat, in the top-left corner (top centre in the full map).
 
 ## Voice reply
 

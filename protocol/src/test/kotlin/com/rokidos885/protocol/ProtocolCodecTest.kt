@@ -42,6 +42,8 @@ class ProtocolCodecTest {
                 listOf("All tests pass.", "I changed nothing."), 1, true),
             T3Status(30),
             GlassesAction(31, ActionType.VOICE_START, T3_CARD_ID),
+            GlassesAction(32, ActionType.VOLUME_UP),
+            GrokBotState(33, true, 50),
         )
         for (m in messages) {
             val (magic, body) = ProtocolCodec.encode(m)

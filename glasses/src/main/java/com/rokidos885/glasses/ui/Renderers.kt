@@ -381,7 +381,7 @@ class HudRenderer(context: Context) {
         return value.take(count)+"…"
     }
 
-    fun draw(c:Canvas,nanos:Long){drawExpanded(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c);countdown(c)}
+    fun draw(c:Canvas,nanos:Long){drawExpanded(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c);tripVolume(c,290f,48f);countdown(c)}
     /** The last seconds before the HUD lets the display sleep: 4, 3, 2, 1 in the top-right corner. */
     private fun countdown(c:Canvas){if(s.sleepIn>0)right(c,s.sleepIn.toString(),462f,44f,34f,204,b=true)}
     private fun drawExpanded(c:Canvas,nanos:Long) {
@@ -406,7 +406,7 @@ class HudRenderer(context: Context) {
                     if(s.mediaVisible) media(c,PAGE_LEFT,110f)
                     else if(!s.linkConnected) center(c,"Phone not connected",240f,199f,30f,204)
                     else if(s.homeActive) center(c,ACTIVE,240f,199f,22f,204,b=true)
-                    if(s.grokBotActive) center(c,GROK_ON,240f,380f,20f,153)
+                    if(s.grokBotActive) grokOn(c,0f,240f,380f)
                 }
             }
             else -> {
@@ -421,7 +421,30 @@ class HudRenderer(context: Context) {
         }
     }
     /** Corner layout: upper 62% stays transparent; map labels are available in expanded mode. */
-    fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c);countdown(c)}
+    fun drawCompact(c:Canvas,nanos:Long){drawCompactCorners(c,nanos);if(s.voice!=null)voiceCard(c) else notificationCard(c);tripVolume(c,18f,44f);countdown(c)}
+    /** On a trip a Grok Bot chat shows only the volume symbol, in a free top corner (home has it after GROK_ON). */
+    private fun tripVolume(c:Canvas,x:Float,y:Float){if(s.grokBotActive && s.navState!=NavState.IDLE && s.navState!=NavState.ENDED)volumeMark(c,x,y)}
+    /**
+     * "‹ speaker, five bars ›": swipe either way for the call volume of a Grok Bot chat. A symbol, no words; the lit bars
+     * are the volume (all dim when unknown). [y] is the bottom; [VOLUME_MARK_W] wide.
+     */
+    private fun volumeMark(c:Canvas,x:Float,y:Float) {
+        // paint() hands out one shared Paint, so each draw asks for its own.
+        fun line()=paint(alpha=191,stroke=2.5f)
+        c.drawLine(x+7f,y-18f,x+1f,y-10f,line());c.drawLine(x+1f,y-10f,x+7f,y-2f,line())
+        c.drawRect(x+14f,y-14f,x+19f,y-6f,paint(alpha=230))
+        c.drawPath(android.graphics.Path().apply {moveTo(x+19f,y-14f);lineTo(x+27f,y-20f);lineTo(x+27f,y);lineTo(x+19f,y-6f);close()},paint(alpha=230))
+        val lit=if(s.grokVolume<0)0 else (s.grokVolume+19)/20
+        for(i in 0 until 5){val l=x+35f+i*8f;c.drawRect(l,y-6f-i*3.5f,l+5f,y,paint(alpha=if(i<lit)255 else 64))}
+        c.drawLine(x+81f,y-18f,x+87f,y-10f,line());c.drawLine(x+87f,y-10f,x+81f,y-2f,line())
+    }
+    /** GROK_ON and the volume symbol after it, centred on [cx] or from [x] (cx<0). */
+    private fun grokOn(c:Canvas,x:Float,cx:Float,y:Float) {
+        val p=paint(20f,153);val w=p.measureText(GROK_ON)
+        val left=if(cx>=0f)cx-(w+16f+VOLUME_MARK_W)/2 else x
+        c.drawText(GROK_ON,left,y,p)
+        volumeMark(c,left+w+16f,y)
+    }
     private fun drawCompactCorners(c:Canvas,nanos:Long) {
         if(s.navState==NavState.IDLE || s.navState==NavState.ENDED) {
             if(s.t3Visible) t3(c,PAGE_LEFT,T3_TALL_TOP,T3_TALL_H)
@@ -429,7 +452,7 @@ class HudRenderer(context: Context) {
                 if(s.mediaVisible) media(c,PAGE_LEFT,408f)
                 else if(!s.linkConnected) text(c,"Phone not connected",18f,600f,28f,204)
                 else if(s.homeActive) text(c,ACTIVE,18f,600f,22f,204,b=true)
-                if(s.grokBotActive) text(c,GROK_ON,18f,if(s.mediaVisible)380f else 600f,20f,153)
+                if(s.grokBotActive) grokOn(c,18f,-1f,if(s.mediaVisible)380f else 600f)
             }
             return
         }
@@ -936,6 +959,7 @@ class HudRenderer(context: Context) {
         private const val NARROW_CARD = 300f
         /** Shown without a trip while a Grok Bot chat runs (on a trip the display stays on anyway). */
         private const val GROK_ON = "GROK BOT  ·  TAP to end"
+        private const val VOLUME_MARK_W = 88f
         /** Home, nothing on it, awake: the next tap starts Grok Bot. */
         private const val ACTIVE = "ACTIVE  ·  TAP for Grok Bot"
         private const val VOICE_SIZE = 26f

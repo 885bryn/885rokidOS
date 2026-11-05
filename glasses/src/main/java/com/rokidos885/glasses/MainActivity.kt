@@ -24,7 +24,9 @@ class MainActivity:AppCompatActivity() {
     private lateinit var hud:HudView
     private val keyReceiver=KeyReceiver { handleKey(it) }
     private val screenOff=object:android.content.BroadcastReceiver(){
-        override fun onReceive(context:android.content.Context?,intent:android.content.Intent?){vm.store.onDisplayOff()}
+        override fun onReceive(context:android.content.Context?,intent:android.content.Intent?){
+            if(intent?.action==android.content.Intent.ACTION_SCREEN_ON)vm.store.onDisplayOn() else vm.store.onDisplayOff()
+        }
     }
     private var backGestureAt=0L
     private var backGestureConsumed=true
@@ -50,8 +52,9 @@ class MainActivity:AppCompatActivity() {
         container.addView(hud,FrameLayout.LayoutParams(if(previewWidth>0)previewWidth else -1,if(previewHeight>0)previewHeight else -1,Gravity.CENTER))
         setContentView(container)
         ContextCompat.registerReceiver(this,keyReceiver,IntentFilter().apply {KeyType.entries.forEach { addAction(it.action) }},ContextCompat.RECEIVER_EXPORTED)
-        // VERIFY on hardware: that the glasses send SCREEN_OFF when the display sleeps.
-        ContextCompat.registerReceiver(this,screenOff,IntentFilter(android.content.Intent.ACTION_SCREEN_OFF),ContextCompat.RECEIVER_NOT_EXPORTED)
+        // VERIFY on hardware: that the glasses send SCREEN_OFF and SCREEN_ON when the display sleeps and wakes.
+        ContextCompat.registerReceiver(this,screenOff,IntentFilter(android.content.Intent.ACTION_SCREEN_OFF).apply {addAction(android.content.Intent.ACTION_SCREEN_ON)},
+            ContextCompat.RECEIVER_NOT_EXPORTED)
         onBackPressedDispatcher.addCallback(this){handleKey(GlassesKey.BACK)}
         val gestures=GestureDetector(this,object:GestureDetector.SimpleOnGestureListener(){
             override fun onDown(e:MotionEvent)=true
@@ -68,7 +71,7 @@ class MainActivity:AppCompatActivity() {
         lifecycleScope.launch {repeatOnLifecycle(Lifecycle.State.STARTED){vm.store.state.collect {hud.render(it)}}}
         // Not tied to STARTED: the display hold and the wake for T3 news must work while the display sleeps.
         lifecycleScope.launch {vm.store.state.collect {keepScreenOn(it)}}
-        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|t3).
+        // Debug only: show a scene without a phone (adb am start --es previewScene card|listening|review|sent|failed|media|t3|grok).
         // The big message numbers make the store ignore the demo trip's own messages.
         if(BuildConfig.DEBUG)intent.getStringExtra("previewScene")?.let {scene->
             val n=1_000_000_000L
@@ -78,6 +81,8 @@ class MainActivity:AppCompatActivity() {
                 store.onMessage(com.rokidos885.protocol.T3Status(n+1,"Fix the glasses build","claude-opus-5-5",com.rokidos885.protocol.T3State.REPLY,
                     "Run the unit tests and tell me what fails","All 214 tests pass. The build is green, and I changed nothing."))
                 store.onKey(GlassesKey.SWIPE_BACK)
+            } else if(scene=="grok") {
+                store.onConnection(true);store.onMessage(com.rokidos885.protocol.GrokBotState(n+1,true,60))
             } else if(scene=="media") {
                 store.onMessage(com.rokidos885.protocol.MediaState(n+1,true,"Spotify","Midnight City, a very long track title that wraps","M83",true,0,0))
                 store.onKey(GlassesKey.SWIPE_FORWARD)
