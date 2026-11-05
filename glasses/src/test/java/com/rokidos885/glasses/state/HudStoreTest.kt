@@ -289,6 +289,24 @@ class HudStoreTest {
         assertEquals(com.rokidos885.protocol.VoicePhase.STARTING,hud.state.value.voice?.phase)
     }
 
+    @Test fun theDisplayComingOnIsTheWakeWhenTheSystemKeepsTheWakingTap() {
+        var now=1_000L
+        val hud=HudStore({now}) {sent+=it}
+        hud.onConnection(true);hud.onMessage(t3(1))
+        hud.onDisplayOff()
+        // The system used the tap to turn the display on and did not deliver it: ACTIVE shows, the next tap starts Grok Bot.
+        hud.onDisplayOn()
+        assertEquals(true,hud.state.value.homeActive)
+        now+=HudStore.WAKE_GAP_MS;hud.onKey(GlassesKey.TAP)
+        assertEquals(ActionType.OPEN_GROK_BOT,sent.single().action)
+        sent.clear()
+        // The system delivered the waking tap after SCREEN_ON: it is the same gesture, so it sends nothing.
+        hud.onMessage(com.rokidos885.protocol.VoiceState(2,com.rokidos885.protocol.VoicePhase.IDLE,com.rokidos885.protocol.VOICE_COMMAND_ID))
+        hud.onDisplayOff()
+        hud.onDisplayOn();now+=100;hud.onKey(GlassesKey.TAP)
+        assertEquals(emptyList<GlassesAction>(),sent)
+    }
+
     @Test fun awakeCountsDownFromFourThenTheHudLetsTheDisplaySleep() {
         var now=1_000L
         val hud=HudStore({now}) {sent+=it}

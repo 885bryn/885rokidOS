@@ -24,7 +24,9 @@ class MainActivity:AppCompatActivity() {
     private lateinit var hud:HudView
     private val keyReceiver=KeyReceiver { handleKey(it) }
     private val screenOff=object:android.content.BroadcastReceiver(){
-        override fun onReceive(context:android.content.Context?,intent:android.content.Intent?){vm.store.onDisplayOff()}
+        override fun onReceive(context:android.content.Context?,intent:android.content.Intent?){
+            if(intent?.action==android.content.Intent.ACTION_SCREEN_ON)vm.store.onDisplayOn() else vm.store.onDisplayOff()
+        }
     }
     private var backGestureAt=0L
     private var backGestureConsumed=true
@@ -50,8 +52,9 @@ class MainActivity:AppCompatActivity() {
         container.addView(hud,FrameLayout.LayoutParams(if(previewWidth>0)previewWidth else -1,if(previewHeight>0)previewHeight else -1,Gravity.CENTER))
         setContentView(container)
         ContextCompat.registerReceiver(this,keyReceiver,IntentFilter().apply {KeyType.entries.forEach { addAction(it.action) }},ContextCompat.RECEIVER_EXPORTED)
-        // VERIFY on hardware: that the glasses send SCREEN_OFF when the display sleeps.
-        ContextCompat.registerReceiver(this,screenOff,IntentFilter(android.content.Intent.ACTION_SCREEN_OFF),ContextCompat.RECEIVER_NOT_EXPORTED)
+        // VERIFY on hardware: that the glasses send SCREEN_OFF and SCREEN_ON when the display sleeps and wakes.
+        ContextCompat.registerReceiver(this,screenOff,IntentFilter(android.content.Intent.ACTION_SCREEN_OFF).apply {addAction(android.content.Intent.ACTION_SCREEN_ON)},
+            ContextCompat.RECEIVER_NOT_EXPORTED)
         onBackPressedDispatcher.addCallback(this){handleKey(GlassesKey.BACK)}
         val gestures=GestureDetector(this,object:GestureDetector.SimpleOnGestureListener(){
             override fun onDown(e:MotionEvent)=true

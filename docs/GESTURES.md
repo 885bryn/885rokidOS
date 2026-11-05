@@ -12,7 +12,8 @@ The 885rokidOS HUD uses the right temple touchpad. Code: `glasses/.../state/HudS
 | **Touch and hold** | Rokid AI assistant (system). The HUD does not use it (decided 2026-11-05). |
 
 **Wake rule.** The touch that wakes a sleeping display only wakes it, on every screen. The next touch acts. One
-gesture counts once, even when the glasses report it two or three times (600 ms guard).
+gesture counts once, even when the glasses report it two or three times (600 ms guard). Android often keeps the
+waking touch from the app, so the display coming on also counts as the wake: one touch wakes, the next acts.
 
 **Awake and sleep.** The HUD stays awake for the system's screen timeout (at least 10 s) after the last touch, or after
 a trip, card, voice step or Grok Bot chat lets go of the display. News from T3 starts the time again. The last 4 s

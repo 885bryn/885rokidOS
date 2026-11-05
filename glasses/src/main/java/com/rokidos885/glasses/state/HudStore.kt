@@ -244,6 +244,17 @@ class HudStore(private val clock:()->Long=System::currentTimeMillis,private val 
     }
     /** The display went to sleep (SCREEN_OFF): the touch that wakes it only wakes it. */
     fun onDisplayOff(){mutable.update {it.copy(awake=false,sleepIn=0)}}
+    /**
+     * The display came on (SCREEN_ON). Android keeps a key that wakes the display from the app, so the waking tap may
+     * never reach [onKey]: the display coming on is the wake then, and the next tap acts (seen 2026-11-05: 3 taps to
+     * Grok Bot). A waking key that does arrive later is dropped as part of the same gesture.
+     */
+    fun onDisplayOn() {
+        val now=clock()
+        awakeAt=now
+        if(!state.value.awake){wokeAt=now;mutable.update {it.copy(awake=true,sleepIn=0)}}
+        kick.trySend(Unit)
+    }
     /** Keys during a voice reply. Everything is consumed so a swipe never skips a song or the double tap never exits. */
     private fun voiceKey(s:HudState,v:VoiceState,key:GlassesKey) {
         val id=v.notificationId
